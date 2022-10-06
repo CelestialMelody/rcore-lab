@@ -1,0 +1,9 @@
+[build]
+target = "riscv64gc-unknown-none-elf" # 之后在 cargo build 的时候不必再加上 --target
+
+# 由于链接器默认的内存布局并不能符合我们的要求，实现与 Qemu 的正确对接
+# 修改 Cargo 的配置文件来使用我们自己的链接脚本 os/src/linker.ld 而非使用默认的内存布局
+[target.riscv64gc-unknown-none-elf]
+rustflags = [
+    "-Clink-arg=-Tsrc/linker.ld", "-Cforce-frame-pointers=yes"
+]
