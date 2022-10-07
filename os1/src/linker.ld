@@ -50,6 +50,7 @@ SECTIONS
         *(.sdata .sdata.*)
     }
 
+    /* 全局符号 sbss 和 ebss 分别指向 .bss 段 除 .bss.stack 以外的起始和终止地址，在使用这部分数据之前需要将它们初始化为零 */
     . = ALIGN(4K);
     edata = .;
     .bss : {

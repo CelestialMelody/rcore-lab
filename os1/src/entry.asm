@@ -5,13 +5,29 @@
     # 告知编译器 _start 是一个全局符号，因此可以被其他目标文件使用
     .globl _start
 _start:
-    li x1, 100
-#     la sp, boot_stack_top
-#     call rust_main
+    # 在控制权转交给 Rust 入口之前会执行两条指令
+    # 栈指针 sp 设置为先前分配的启动栈栈顶地址，这样 Rust 代码在进行函数调用和返回的时候就可以正常在启动栈上分配和回收栈帧
+    la sp, boot_stack_top
+    # 通过伪指令 call 调用 Rust 编写的内核入口点 rust_main 将控制权转交给 Rust 代码，该入口点在 main.rs 中实现
+    call rust_main
 
-#     .section .bss.stack
-#     .globl boot_stack
-# boot_stack:
-#     .space 4096 * 16
-#     .globl boot_stack_top
-# boot_stack_top:
+    # 在我们设计好的内存布局中，这块启动栈所用的内存并不会和内核的其他代码、数据段产生冲突，
+    # 它们是从物理上隔离的。然而如果启动栈溢出（比如在内核代码中出现了死递归），
+    # 那么分配的栈帧将有可能覆盖内核其他部分的代码、数据从而出现十分诡异的错误。
+    # 目前只能尽量避免栈溢出的情况发生，到了第四章，借助地址空间抽象和 MMU 硬件的帮助，可以做到完全禁止栈溢出
+
+    # 将这块空间放置在一个名为 .bss.stack 的段中 -> linker.ld
+    # 链接脚本 linker.ld 中可以看到 .bss.stack 段最终会被汇集到 .bss 段中
+    .section .bss.stack
+    .globl boot_stack
+    # .bss 段一般放置需要被初始化为零的数据
+    # 然而栈并不需要在使用前被初始化为零，因为在函数调用的时候我们会插入栈帧覆盖已有的数据
+    # 尝试将其放置到全局数据 .data 段中但最后未能成功，因此才决定将其放置到 .bss 段中
+
+# 在 RISC-V 架构上，栈是从高地址向低地址增长(这里从低地址到高地址按顺序放置)，因此用更高地址的符号 boot_stack_top 来标识栈顶的位置，
+# 用更低地址的符号 boot_stack 来标识栈底的位置，它们都被设置为全局符号供其他目标文件使用
+boot_stack:
+    # 内核的内存布局中预留了一块大小为 4096 * 16 字节的空间用作接下来要运行的程序的栈空间
+    .space 4096 * 16
+    .globl boot_stack_top
+boot_stack_top:
