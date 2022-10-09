@@ -2,10 +2,13 @@
 #![no_main]
 #![feature(panic_info_message)]
 
+use log::*;
 #[macro_use]
 mod console;
 mod lang_items;
 mod sbi; // 将内核与 RustSBI 通信的相关功能实现在子模块 sbi 中，加入 mod sbi 将该子模块加入的项目
+mod logging;
+
 
 core::arch::global_asm!(include_str!("entry.asm"));
 
@@ -28,19 +31,47 @@ fn clear_bss() {
 // 不然在链接的时候， entry.asm 将找不到 main.rs 提供的外部符号 rust_main 从而导致链接失败
 #[no_mangle]
 fn rust_main() -> ! {
-    // extern "C" {
-    //     fn stext();
-    //     fn etext();
-    //     fn srodata();
-    //     fn erodata();
-    //     fn sdata();
-    //     fn edata();
-    //     fn sbss();
-    //     fn ebss();
-    //     fn boot_stack();
-    //     fn boot_stack_top();
-    // }
+    extern "C" {
+        fn stext();
+        fn etext();
+        fn srodata();
+        fn erodata();
+        fn sdata();
+        fn edata();
+        fn sbss();
+        fn ebss();
+        fn boot_stack();
+        fn boot_stack_top();
+    }
     clear_bss();
-    print!("Hello, World");
+    logging::init();
+    println!("Hello, World");
+    println!("Hello, rCore");
+
+    trace!(".text [{:#x}, {:#x})",
+        stext as usize,
+        etext as usize
+        );
+    debug!(
+        ".rodata [{:#x}, {:#x})",
+        srodata as usize,
+        erodata as usize
+    );
+    info!(
+        ".data [{:#x}, {:#x})",
+        sdata as usize,
+        edata as usize
+    );
+    warn!(
+        "boot stack [{:#x}, {:#x})",
+        boot_stack as usize,
+        boot_stack_top as usize
+    );
+    error!(
+        ".bss [{:#x}, {:#x})",
+        sbss as usize,
+        ebss as usize
+    );
+
     panic!("Shutdown machine!");
 }
