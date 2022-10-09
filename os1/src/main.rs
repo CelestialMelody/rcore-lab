@@ -13,14 +13,14 @@ mod logging;
 core::arch::global_asm!(include_str!("entry.asm"));
 
 fn clear_bss() {
-    extern "C" {
+    extern "C" { // extern “C” 可以引用一个外部的 C 函数接口（这意味着调用它的时候要遵从目标平台的 C 语言调用规范）
         fn sbss();
         fn ebss();
     }
     // 尝试从其他地方找到全局符号 sbss 和 ebss ，
     // 它们由链接脚本 linker.ld 给出，
     // 并分别指出需要被清零的 .bss 段的起始和终止地址 
-    (sbss as usize..ebss as usize)
+    (sbss as usize..ebss as usize) // 引用位置标志并将其转成 usize 获取它的地址
             // 遍历该地址区间并逐字节进行清零
             .for_each(|a| unsafe {
                 (a as *mut u8).write_volatile(0)
