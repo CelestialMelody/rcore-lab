@@ -96,6 +96,6 @@ RUN export PATH="$PATH:/usr/local/opt/riscv-gnu-toolchain/bin"
 # above seems did not work, so seems can only when in container add path by yourself
 
 RUN apt-get update
-RUN apt install -y vim
+RUN apt install -y vim tmux
 # Ready to go
 WORKDIR ${HOME}
