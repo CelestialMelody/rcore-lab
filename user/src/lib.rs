@@ -57,7 +57,6 @@ fn main() -> i32 {
 }
 
 pub fn exit(code: i32) -> ! {
-    // console::flush();
     sys_exit(code);
 }
 
