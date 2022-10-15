@@ -97,5 +97,12 @@ RUN export PATH="$PATH:/usr/local/opt/riscv-gnu-toolchain/bin"
 
 RUN apt-get update
 RUN apt install -y vim tmux
+
+# 5. build env
+RUN (rustup target list | grep "riscv64gc-unknown-none-elf (installed)") || rustup target add riscv64gc-unknown-none-elf
+RUN cargo install cargo-binutils --vers ~0.3
+RUN rustup component add rust-src
+RUN rustup component add llvm-tools-preview
+
 # Ready to go
 WORKDIR ${HOME}
