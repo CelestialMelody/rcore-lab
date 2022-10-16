@@ -1,9 +1,11 @@
 # Building
 TARGET := riscv64gc-unknown-none-elf
 MODE := release
-KERNEL_ELF := target/$(TARGET)/$(MODE)/os2 # change to os2
+# fix: should not add annotation after variable
+KERNEL_ELF := target/$(TARGET)/$(MODE)/os2
 KERNEL_BIN := $(KERNEL_ELF).bin
-KERNEL_ASM := $(KERNEL_ELF).asm # os2: add
+# os2 add
+KERNEL_ASM := $(KERNEL_ELF).asm 
 
 # BOARD
 BOARD ?= qemu
