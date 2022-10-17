@@ -16,8 +16,9 @@ BOOTLOADER := ../bootloader/$(SBI)-$(BOARD).bin
 KERNEL_ENTRY_PA := 0x80200000
 
 # Binutils
-OBJDUMP := rust-objdump --arch-name=riscv64
+OBJDUMP := rust-objdump --arch-name=r
 OBJCOPY := rust-objcopy --binary-architecture=riscv64
+RV64_OBJDUMP := riscv64-unknown-elf-objdump
 
 # os2: add
 CHAPTER ?= $(shell git rev-parse --abbrev-ref HEAD | grep -oP 'ch\K[0-9]')
@@ -63,4 +64,6 @@ debug: build
 dbg: build
 	qemu-system-riscv64 -machine virt -nographic -bios $(BOOTLOADER) -device loader,file=$(KERNEL_BIN),addr=$(KERNEL_ENTRY_PA) -s -S
 
+dump: run
+	@$(RV64_OBJDUMP) $(KERNEL_ELF) -d > os2.dump.s
 .PHONY: build env kernel clean run-inner
