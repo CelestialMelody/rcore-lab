@@ -30,8 +30,9 @@ pub fn init() {
 
 #[no_mangle]
 // 在 __restore 的时候 a0 寄存器在调用 trap_handler 前后并没有发生变化，
-// 仍然指向分配 Trap 上下文之后的内核栈栈顶，和此时 sp 的值相同，这里的 sp <- a0 并不会有问题；
-pub fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
+// 仍然指向分配 Trap 上下文之后的内核栈栈顶，和此时 sp 的值相同，这里的 sp <- a0 并不会有问题； see trap.S: __restore
+// 参数 cx 使用 a0 传参，使用 a0 作为返回 故没有改变   
+pub fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext { // 三条消除规则: 若只有一个输入生命周期(函数参数中只有一个引用类型)，那么该生命周期会被赋给所有的输出生命周期
     let scause = scause::read();
     let stval = stval::read();
     // 根据 scause 寄存器所保存的 Trap 的原因进行分发处理。无需手动操作这些 CSR ，而是使用 Rust 的 riscv 库来更加方便的做这些事情
@@ -48,7 +49,7 @@ pub fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
             // 用来保存系统调用返回值的 a0 寄存器也会同样发生变化。
             // 我们从 Trap 上下文取出作为 syscall ID 的 a7(x17) 和系统调用的三个参数 a0~a2 传给 syscall 函数并获取返回值。 
             // syscall 函数是在 syscall 子模块中实现的。 这段代码是处理正常系统调用的控制逻辑。
-            cx.x[10] = syscall(cx.x[17], [cx.x[10], cx.x[11], cx.x[12]]) as usize; // 调用系统调用
+            cx.x[10] = syscall(cx.x[17], [cx.x[10], cx.x[11], cx.x[12]]) as usize; // x10(a0) 保存返回值; 这里修改的是用户态，应用程序上下文，a0 作为返回值
         }
         // 分别处理应用程序出现访存错误和非法指令错误的情形。
         // 此时需要打印错误信息并调用 run_next_app 直接切换并运行下一个应用程序。

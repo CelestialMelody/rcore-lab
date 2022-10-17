@@ -43,12 +43,12 @@ impl TrapContext {
     pub fn app_init_context(entry: usize, sp: usize) -> Self {
         let mut sstatus = sstatus::read(); // 读取 sstatus 寄存器
         sstatus.set_spp(SPP::User);
-        // 修改 sepc 寄存器为应用程序入口点 entry， 
+        // 修改 sepc 寄存器为应用程序入口点 entry(APP_BASE_ADDRESS)， 
         // sp 寄存器为我们设定的一个栈指针，
         // 并将 sstatus 寄存器的 SPP 字段设置为 User
         let mut context = Self {
             x: [0; 32],
-            sepc: entry,
+            sepc: entry, // APP_BASE_ADDRESS: 0x80400000
             sstatus,
         };
         context.set_sp(sp);
