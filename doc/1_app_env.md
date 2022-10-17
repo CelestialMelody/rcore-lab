@@ -201,9 +201,12 @@ println! 宏所在的 Rust 标准库 std 需要通过系统调用获得操作系
 
 #### 分配并使用启动栈
 
+为了将控制权转交给我们使用 Rust 语言编写的内核入口，需要手写若干行汇编代码，这些汇编代码放在 `entry.asm` 中并在控制权被转交给内核后最先被执行，但它们的功能会更加复杂：首先设置栈来在内核内使能函数调用，随后直接调用使用 Rust 编写的内核入口点，从而控制权便被移交给 Rust 代码
+
+
 - 在 `entry.asm` 中[分配启动栈空间](http://rcore-os.cn/rCore-Tutorial-Book-v3/chapter1/5support-func-call.html#:~:text=entry.asm%20%E4%B8%AD-,%E5%88%86%E9%85%8D%E5%90%AF%E5%8A%A8%E6%A0%88%E7%A9%BA%E9%97%B4,-%EF%BC%8C%E5%B9%B6%E5%9C%A8%E6%8E%A7%E5%88%B6)，并在控制权被转交给 Rust 入口之前将栈指针 `sp` 设置为栈顶的位置
 
-- 通过伪指令 `call` 调用 Rust 编写的![image-20221009150238044](/home/clstilmldy/note/OS/rCore/pic/image-20221009150238044.png)内核入口点 `rust_main` 将[控制权转交]()给 Rust 代码，该入口点在 `main.rs` 中实现
+- 通过伪指令 `call` 调用 Rust 编写的内核入口点 `rust_main` 将[控制权转交]()给 Rust 代码，该入口点在 `main.rs` 中实现
 - 完成对 `.bss` 段的[清零](http://rcore-os.cn/rCore-Tutorial-Book-v3/chapter1/5support-func-call.html#:~:text=%E6%88%91%E4%BB%AC%E9%A1%BA%E4%BE%BF-,%E5%AE%8C%E6%88%90%E5%AF%B9%20.bss%20%E6%AE%B5%E7%9A%84%E6%B8%85%E9%9B%B6,-%E3%80%82%E8%BF%99%E6%98%AF%E5%86%85)
 
 
