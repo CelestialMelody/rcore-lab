@@ -149,6 +149,8 @@ lazy_static! {
     };
 }
 
+
+/// 调用 print_app_info 的时候第一次用到了全局变量 APP_MANAGER ，它也是在这个时候完成初始化
 pub fn init() {
     print_app_info();
 }
