@@ -18,11 +18,11 @@ struct UserStack {
     data: [u8; USER_STACK_SIZE],
 }
 
-static KERNEL_STACK: KernelStack = KernelStack {
+static mut KERNEL_STACK: KernelStack = KernelStack {
     data: [0; KERNEL_STACK_SIZE],
 };
 
-static USER_STACK: UserStack = UserStack {
+static mut USER_STACK: UserStack = UserStack {
     data: [0; USER_STACK_SIZE],
 };
 
@@ -31,7 +31,7 @@ static USER_STACK: UserStack = UserStack {
 /// 由于在 RISC-V 中栈是向下增长的， 我们只需返回包裹的数组的结尾地址
 /// 换栈是非常简单的，只需将 sp 寄存器的值修改为 get_sp 的返回值即可
 impl KernelStack {
-    // get the top address of kernel stack; sp register
+    // get the top address of kernel stack
     fn get_sp(&self) -> usize {
         self.data.as_ptr() as usize + KERNEL_STACK_SIZE
     }
@@ -157,6 +157,10 @@ pub fn init() {
 
 pub fn print_app_info() {
     APP_MANAGER.exclusive_access().print_app_info();
+    unsafe{
+        info!("KERNEL_STACK: {:#x}, {:#x}", KERNEL_STACK.get_sp() - KERNEL_STACK_SIZE, KERNEL_STACK.get_sp());
+        info!("USER_STACK: {:#x}, {:#x}", USER_STACK.get_sp() - USER_STACK_SIZE, USER_STACK.get_sp());
+    }
 }
 
 pub fn run_next_app() -> !{
