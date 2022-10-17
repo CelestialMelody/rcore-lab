@@ -86,23 +86,25 @@ WORKDIR ${HOME}
 RUN git clone --recursive https://github.com/riscv/riscv-gnu-toolchain
 
 WORKDIR ${HOME}/riscv-gnu-toolchain
-RUN    ./configure --prefix=/usr/local/opt/riscv-gnu-toolchain && make
-# RUN    ./configure --prefix=/opt/riscv-gnu-toolchain && make
-
-# seems did not works
-ENV RISCV_GNU_TOOLCHAIN_HOME=/usr/local/opt/riscv-gnu-toolchain/bin
-# seems did not works
-RUN export PATH="$PATH:/usr/local/opt/riscv-gnu-toolchain/bin"
-# above seems did not work, so seems can only when in container add path by yourself
-
-RUN apt-get update
-RUN apt install -y vim tmux
+ENV RISCV_GNU_TOOLCHAIN_HOME=/usr/local/riscv-gnu-toolchain \
+    PATH=/usr/local/riscv-gnu-toolchain/bin:$PATH
+RUN    ./configure --prefix=/usr/local/riscv-gnu-toolchain && make -j$(nproc)
 
 # 5. build env
 RUN (rustup target list | grep "riscv64gc-unknown-none-elf (installed)") || rustup target add riscv64gc-unknown-none-elf
 RUN cargo install cargo-binutils --vers ~0.3
 RUN rustup component add rust-src
 RUN rustup component add llvm-tools-preview
+
+# RUN export PATH="$PATH:/usr/local/opt/riscv-gnu-toolchain/bin"
+
+# 6. debug tools
+RUN apt-get update && \
+    apt-get install -y \
+        python3-pip \
+        vim \
+        tmux
+RUN pip3 install pygments
 
 # Ready to go
 WORKDIR ${HOME}
