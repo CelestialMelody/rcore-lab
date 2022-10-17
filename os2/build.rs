@@ -1,7 +1,7 @@
 // see [`vedio`](https://www.bilibili.com/video/BV1kZ4y167gf/?spm_id_from=333.788&vd_source=fff8a96619bd3da6d1cb5d5c1ede2cf1)
 // see [`link`](https://course.rs/cargo/reference/build-script/intro.html)
+use std::fs::{read_dir, File};
 use std::io::{Result, Write};
-use std::fs::{File, read_dir};
 
 static TARGET_PATH: &str = "../user/target/riscv64gc-unknown-none-elf/release/";
 
@@ -9,10 +9,11 @@ fn main() {
     println!("cargo:rerun-if-changed=../user/src/"); // 重新编译
     println!("cargo:rerun-if-changed={}", TARGET_PATH);
     insert_app_data().unwrap();
-    
 }
 
 #[allow(unused)]
+///  把应用程序的二进制镜像文件（从 ELF 格式可执行文件剥离元数据）作为内核的数据段链接到内核里面，
+///  因此内核需要知道内含的应用程序的数量和它们的位置，这样才能够在运行时对它们进行管理并能够加载到物理内存
 fn insert_app_data() -> Result<()> {
     let mut f = File::create("src/link_app.S").unwrap();
     // Vec<_> `_`是类型占位符, Rust 编译器推断什么类型进入Vec
@@ -22,7 +23,7 @@ fn insert_app_data() -> Result<()> {
         .map(|dir_entry| {
             // name_with_ext: file name with extension
             let mut name_with_ext = dir_entry.unwrap().file_name().into_string().unwrap(); // 获取文件名
-            // drain: 从字符串中移除指定范围的字符并返回它们
+                                                                                           // drain: 从字符串中移除指定范围的字符并返回它们
             name_with_ext.drain(name_with_ext.find('.').unwrap()..name_with_ext.len()); // 删除后缀
             name_with_ext // 返回文件名
         })
@@ -35,7 +36,7 @@ fn insert_app_data() -> Result<()> {
     // .quad: 8字节, 32bit的值
     // .incbin: 将二进制文件插入到目标文件中
 
-    writeln!{f, r#"
+    writeln! {f, r#"
     .align 3
     .section .data
     .global _num_apps
@@ -50,13 +51,17 @@ _num_apps:
 
     for (idx, app) in apps.iter().enumerate() {
         println!("app_{}: {}", idx, app);
-        writeln!(f, r#"
+        writeln!(
+            f,
+            r#"
     .section .data
     .global _app_{0}_start
     .global _app_{0}_end
 _app_{0}_start:
     .incbin "{1}{0}.bin"
-_app_{0}_end:"#, app, TARGET_PATH)?;
+_app_{0}_end:"#,
+            app, TARGET_PATH
+        )?;
     }
     Ok(())
 }
