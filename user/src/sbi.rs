@@ -17,9 +17,9 @@ fn sbi_call(which: usize, arg0: usize, arg1: usize, arg2: usize) -> usize {
         core::arch::asm!(
             "li x16, 0",  // `a0~a6` 保存系统调用的参数
             "ecall", // ecall is a trap instruction
-            inlateout("x10") arg0 => ret, 
-            in("x11") arg1, 
-            in("x12") arg2, 
+            inlateout("x10") arg0 => ret,
+            in("x11") arg1,
+            in("x12") arg2,
             in("x17") which, // `a7` 用来传递 syscall ID
         );
     }

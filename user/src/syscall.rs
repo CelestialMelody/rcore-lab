@@ -24,7 +24,6 @@ pub fn syscall(id: usize, args: [usize; 3]) -> isize {
     ret
 }
 
-
 /// 功能：将内存中缓冲区中的数据写入文件。
 /// 参数：`fd` 表示待写入文件的文件描述符；
 ///      `buf` 表示内存中缓冲区的地址段；
