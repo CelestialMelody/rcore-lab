@@ -61,8 +61,8 @@ _num_apps:
 _app_{0}_start:
     .incbin "{1}{0}.bin"
 _app_{0}_end:"#,
-            app, TARGET_PATH
-            // idx, app, TARGET_PATH
+            app,
+            TARGET_PATH // idx, app, TARGET_PATH
         )?;
     }
     Ok(())

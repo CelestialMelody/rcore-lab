@@ -6,17 +6,16 @@
 #[macro_use]
 extern crate log;
 
-
 #[macro_use]
 mod console;
 mod lang_items;
-mod sbi; // 将内核与 RustSBI 通信的相关功能实现在子模块 sbi 中，加入 mod sbi 将该子模块加入的项目
 mod logging;
+mod sbi; // 将内核与 RustSBI 通信的相关功能实现在子模块 sbi 中，加入 mod sbi 将该子模块加入的项目
 
 mod batch;
 mod sync; // src 其他文件夹也视为mod 但需要提供mod.rs
-mod trap;
 mod syscall;
+mod trap;
 
 core::arch::global_asm!(include_str!("entry.asm"));
 core::arch::global_asm!(include_str!("link_app.S"));
@@ -31,12 +30,10 @@ fn clear_bss() {
     // 并分别指出需要被清零的 .bss 段的起始和终止地址
 
     unsafe {
-        core::slice::from_raw_parts_mut(
-            sbss as usize as *mut u8,
-            ebss as usize - sbss as usize
-        ).fill(0);
+        core::slice::from_raw_parts_mut(sbss as usize as *mut u8, ebss as usize - sbss as usize)
+            .fill(0);
     }
-    
+
     // (sbss as usize..ebss as usize)
     //         // 遍历该地址区间并逐字节进行清零
     //         .for_each(|a| unsafe {
@@ -65,30 +62,24 @@ fn rust_main() -> ! {
     println!("[kernel] Hello, World");
     println!("[kernel] Hello, rCore");
 
-    trace!("[kernel] .text [{:#x}, {:#x})",
+    trace!(
+        "[kernel] .text [{:#x}, {:#x})",
         stext as usize,
         etext as usize
-        );
+    );
     debug!(
         "[kernel] .rodata [{:#x}, {:#x})",
-        srodata as usize,
-        erodata as usize
+        srodata as usize, erodata as usize
     );
     info!(
         "[kernel] .data [{:#x}, {:#x})",
-        sdata as usize,
-        edata as usize
+        sdata as usize, edata as usize
     );
     warn!(
         "[kernel] boot stack [{:#x}, {:#x})",
-        boot_stack as usize,
-        boot_stack_top as usize
+        boot_stack as usize, boot_stack_top as usize
     );
-    error!(
-        "[kernel] .bss [{:#x}, {:#x})",
-        sbss as usize,
-        ebss as usize
-    );
+    error!("[kernel] .bss [{:#x}, {:#x})", sbss as usize, ebss as usize);
 
     trap::init();
     batch::init();

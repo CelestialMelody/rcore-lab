@@ -41,9 +41,7 @@ impl KernelStack {
         unsafe {
             *cx_ptr = cx;
         }
-        unsafe {
-            cx_ptr.as_mut().unwrap()
-        }
+        unsafe { cx_ptr.as_mut().unwrap() }
     }
 }
 
@@ -68,7 +66,8 @@ impl AppManager {
     pub fn print_app_info(&self) {
         info!("[kernel] num_apps: {}", self.num_apps);
         for i in 0..self.num_apps {
-            info!("[kernel] app_{} [{:#x}, {:#x})",
+            info!(
+                "[kernel] app_{} [{:#x}, {:#x})",
                 i,
                 self.app_start[i],
                 self.app_start[i + 1]
@@ -104,20 +103,14 @@ impl AppManager {
         // 它本质上是把数据从一块内存复制到另一块内存，从批处理操作系统的角度来看，
         // 是将操作系统数据段的一部分数据（实际上是应用程序）复制到了一个可以执行代码的内存区域。
         // 在这一点上也体现了冯诺依曼计算机的 代码即数据 的特征。
-        core::slice::from_raw_parts_mut(
-            APP_BASE_ADDRESS as *mut u8,
-            APP_SIZE_LIMIT
-        ).fill(0);
+        core::slice::from_raw_parts_mut(APP_BASE_ADDRESS as *mut u8, APP_SIZE_LIMIT).fill(0);
         // copy app to app area
         let app_src = core::slice::from_raw_parts(
             self.app_start[app_id] as *const u8,
-            self.app_start[app_id + 1] - self.app_start[app_id]
+            self.app_start[app_id + 1] - self.app_start[app_id],
         );
         // 从 app_src 拷贝到 APP_BASE_ADDRESS
-        let app_dst = core::slice::from_raw_parts_mut(
-            APP_BASE_ADDRESS as *mut u8,
-            app_src.len()
-        );
+        let app_dst = core::slice::from_raw_parts_mut(APP_BASE_ADDRESS as *mut u8, app_src.len());
         app_dst.copy_from_slice(app_src);
     }
 }
@@ -127,10 +120,10 @@ lazy_static! {
         UnSafeCell::new({
             extern "C" {
                 // 找到 link_app.S 中提供的符号 _num_apps，并从这里开始解析出应用数量以及各个应用的起始地址
-                fn _num_apps(); 
+                fn _num_apps();
             }
             let num_app_ptr = _num_apps as usize as *const usize;
-            let num_apps = num_app_ptr.read_volatile(); // read_volatile; 对ptr的值进行易失性读取，而无需移动它 
+            let num_apps = num_app_ptr.read_volatile(); // read_volatile; 对ptr的值进行易失性读取，而无需移动它
             let mut app_start: [usize; MAX_APP_NUM + 1] = [0; MAX_APP_NUM + 1];
             // app_start_raw
             // slice::from_raw_parts 根据指针和长度形成切片
@@ -139,7 +132,7 @@ lazy_static! {
                 num_app_ptr.add(1), num_apps + 1
             );
             //  slice::copy_from_slice: 使用 memcpy 将所有元素从 src 复制到 self
-            app_start[..=num_apps].copy_from_slice(app_start_raw); 
+            app_start[..=num_apps].copy_from_slice(app_start_raw);
             AppManager {
                 num_apps,
                 current_app: 0,
@@ -149,7 +142,6 @@ lazy_static! {
     };
 }
 
-
 /// 调用 print_app_info 的时候第一次用到了全局变量 APP_MANAGER ，它也是在这个时候完成初始化
 pub fn init() {
     print_app_info();
@@ -157,13 +149,21 @@ pub fn init() {
 
 pub fn print_app_info() {
     APP_MANAGER.exclusive_access().print_app_info();
-    unsafe{
-        info!("KERNEL_STACK: {:#x}, {:#x}", KERNEL_STACK.get_sp() - KERNEL_STACK_SIZE, KERNEL_STACK.get_sp());
-        info!("USER_STACK: {:#x}, {:#x}", USER_STACK.get_sp() - USER_STACK_SIZE, USER_STACK.get_sp());
+    unsafe {
+        info!(
+            "KERNEL_STACK: {:#x}, {:#x}",
+            KERNEL_STACK.get_sp() - KERNEL_STACK_SIZE,
+            KERNEL_STACK.get_sp()
+        );
+        info!(
+            "USER_STACK: {:#x}, {:#x}",
+            USER_STACK.get_sp() - USER_STACK_SIZE,
+            USER_STACK.get_sp()
+        );
     }
 }
 
-pub fn run_next_app() -> !{
+pub fn run_next_app() -> ! {
     let mut app_manager = APP_MANAGER.exclusive_access();
     let current_app = app_manager.get_current_app();
 
@@ -177,7 +177,7 @@ pub fn run_next_app() -> !{
     // before this we have to drop local variables related to resources manually
     // and release the resources
     extern "C" {
-        fn __restore(cx_addr:usize);// restore context; cx_addr: context address
+        fn __restore(cx_addr: usize); // restore context; cx_addr: context address
     }
     unsafe {
         // 在内核栈上压入一个 Trap 上下文，其 sepc 是应用程序入口地址 0x80400000 ，
@@ -185,12 +185,10 @@ pub fn run_next_app() -> !{
         // push_context 的返回值是内核栈压入 Trap 上下文之后的栈顶，它会被作为 __restore 的参数
         // -> trap.S, 这时我们可以理解为何 __restore 函数的起始部分会完成
         // 这使得在 __restore 函数中 sp 仍然可以指向内核栈的栈顶。这之后，就和执行一次普通的 __restore 函数调用一样了
-        __restore(KERNEL_STACK.push_context(
-            TrapContext::app_init_context(
-                APP_BASE_ADDRESS, 
-                USER_STACK.get_sp(),
-            )
-        ) as *const _ as usize);
+        __restore(KERNEL_STACK.push_context(TrapContext::app_init_context(
+            APP_BASE_ADDRESS,
+            USER_STACK.get_sp(),
+        )) as *const _ as usize);
     }
-    panic!("Unreachable in batch::run_next_app!");        
+    panic!("Unreachable in batch::run_next_app!");
 }

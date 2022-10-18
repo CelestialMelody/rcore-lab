@@ -12,7 +12,6 @@ pub struct UnSafeCell<T> {
     inner: RefCell<T>,
 }
 
-
 /// unsafe:
 /// 将 UPSafeCell 标记为 Sync 使得它可以作为一个全局变量。
 /// 这是 unsafe 行为，因为编译器无法确定我们的 UPSafeCell 能否安全的在多线程间共享。
@@ -25,7 +24,7 @@ unsafe impl<T> Sync for UnSafeCell<T> {}
 impl<T> UnSafeCell<T> {
     /// User is responsible to guarantee that inner struct is only used in
     /// uniprocessor.
-    /// unsafe: 
+    /// unsafe:
     /// 希望使用者在创建一个 UPSafeCell 的时候
     /// 保证在访问 UPSafeCell 内包裹的数据的时候始终不违背上述模式：
     /// 即访问之前调用 exclusive_access ，访问之后销毁借用标记再进行下一次访问。
@@ -41,7 +40,8 @@ impl<T> UnSafeCell<T> {
     /// 当我们要访问数据时（无论读还是写），需要首先调用 exclusive_access 获得数据的可变借用标记，
     /// 通过它可以完成数据的读写，在操作完成之后我们需要销毁这个标记，此后才能开始对该数据的下一次访问。
     /// 相比 RefCell 它不再允许多个读操作同时存在
-    pub fn exclusive_access(&self) -> RefMut<'_, T> { // `<'_, T>`
+    pub fn exclusive_access(&self) -> RefMut<'_, T> {
+        // `<'_, T>`
         self.inner.borrow_mut()
     }
 }
