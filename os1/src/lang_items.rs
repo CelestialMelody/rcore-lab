@@ -1,5 +1,5 @@
-use core::panic::PanicInfo;
 use crate::sbi::shutdown;
+use core::panic::PanicInfo;
 // use crate::println; // main -> micro_use
 
 #[panic_handler] // 当遇到不可恢复错误的时候，被标记为语义项 #[panic_handler] 的 panic 函数将会被调用

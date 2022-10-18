@@ -25,11 +25,10 @@ macro_rules! print {
     }
 }
 
-
 #[macro_export]
 /// Prints to the host console using the same syntax as `println!`.
 macro_rules! println {
     ($fmt: literal $(, $($arg: tt)+)?) => {
-       $crate::console::print(format_args!(concat!($fmt, "\n") $(, $($arg)+)?)); 
+       $crate::console::print(format_args!(concat!($fmt, "\n") $(, $($arg)+)?));
     }
 }

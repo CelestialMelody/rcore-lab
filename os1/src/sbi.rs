@@ -11,8 +11,8 @@ const SBI_REMOTE_SFENCE_VMA: usize = 6;
 const SBI_REMOTE_SFENCE_VMA_ASID: usize = 7;
 const SBI_SHUTDOWN: usize = 8;
 
-/// which 表示请求 RustSBI 的服务的类型; 
-/// arg0 ~ arg2 表示传递给 RustSBI 的 3 个参数; 
+/// which 表示请求 RustSBI 的服务的类型;
+/// arg0 ~ arg2 表示传递给 RustSBI 的 3 个参数;
 /// RustSBI 在将请求处理完毕后，会给内核一个返回值，这个返回值也会被 sbi_call 函数返回
 #[inline(always)]
 fn sbi_call(which: usize, arg0: usize, arg1: usize, arg2: usize) -> usize {

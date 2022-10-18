@@ -1,4 +1,4 @@
-use log::{self, LevelFilter,  Level, Log, Metadata, Record};
+use log::{self, Level, LevelFilter, Log, Metadata, Record};
 
 /// A simple logger that prints all log messages
 struct SimpleLogger;
@@ -12,14 +12,14 @@ impl Log for SimpleLogger {
     }
     fn log(&self, record: &Record) {
         if !self.enabled(record.metadata()) {
-            return; 
+            return;
         }
         let color = match record.level() {
-            Level::Error =>  31, // 红色
-            Level::Warn  =>  93, // Bright Yellow
-            Level::Info  =>  34, // 蓝色
-            Level::Debug =>  32, // 绿色
-            Level::Trace =>  36, // 青色
+            Level::Error => 31, // 红色
+            Level::Warn => 93,  // Bright Yellow
+            Level::Info => 34,  // 蓝色
+            Level::Debug => 32, // 绿色
+            Level::Trace => 36, // 青色
         };
         println!(
             "\u{1B}[{}m[{:>5}] {}\u{1B}[0m",
@@ -35,7 +35,8 @@ impl Log for SimpleLogger {
 pub fn init() {
     static LOGGER: SimpleLogger = SimpleLogger; // 初始化一个 SimpleLogger
     log::set_logger(&LOGGER).unwrap(); // 设置日志记录器
-    log::set_max_level(match option_env!("LOG") { // 通过环境变量 RUST_LOG 来控制日志的输出级别
+    log::set_max_level(match option_env!("LOG") {
+        // 通过环境变量 RUST_LOG 来控制日志的输出级别
         Some(s) => match s {
             "ERROR" => LevelFilter::Error,
             "WARN" => LevelFilter::Warn,
