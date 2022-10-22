@@ -75,7 +75,7 @@ __alltraps:
 __restore:
     # case1: start running app by __restore
     # case2: back to U after handling trap
-    mv sp, a0
+    mv sp, a0 # 传入参数a0: 内核栈中保存的用户上下文
     # now sp->kernel stack(after allocated), sscratch->user stack
 
     # 从内核栈顶的 Trap 上下文恢复通用寄存器和 CSR 。
@@ -83,7 +83,7 @@ __restore:
     # restore sstatus/sepc
     ld t0, 32*8(sp) # sstatus
     ld t1, 33*8(sp) # sepc
-    ld t2, 2*8(sp) # sscratch
+    ld t2, 2*8(sp) # sscratch; x2(sp) 指向 USER_STACK 栈顶
     csrw sstatus, t0
     csrw sepc, t1
     csrw sscratch, t2
@@ -102,7 +102,7 @@ __restore:
     # release TrapContext on kernel stack
     addi sp, sp, 34*8
 
-    # 再次交换 sscratch 和 sp，现在 sp 重新指向用户栈栈顶，sscratch 也依然保存进入 Trap 之前的状态并指向内核栈栈顶
+    # 再次交换 sscratch 和 sp，现在 sp 重新指向用户栈，sscratch 也依然保存进入 Trap 之前的状态并指向内核栈栈顶
     # now sp->kernel stack, sscratch->user stack
     csrrw sp, sscratch, sp
 

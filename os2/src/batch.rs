@@ -183,7 +183,7 @@ pub fn run_next_app() -> ! {
         // 在内核栈上压入一个 Trap 上下文，其 sepc 是应用程序入口地址 0x80400000 ，
         // 其 sp 寄存器指向用户栈，其 sstatus 的 SPP 字段被设置为 User 。
         // push_context 的返回值是内核栈压入 Trap 上下文之后的栈顶，它会被作为 __restore 的参数
-        // -> trap.S, 这时我们可以理解为何 __restore 函数的起始部分会完成
+        // -> trap.S, 这时我们可以理解为何 __restore 函数的起始部分会完成 sp <- a0 的操作
         // 这使得在 __restore 函数中 sp 仍然可以指向内核栈的栈顶。这之后，就和执行一次普通的 __restore 函数调用一样了
         __restore(KERNEL_STACK.push_context(TrapContext::app_init_context(
             APP_BASE_ADDRESS,
