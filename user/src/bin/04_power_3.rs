@@ -8,6 +8,7 @@ const LEN: usize = 100;
 
 #[no_mangle]
 fn main() -> i32 {
+    // NOTE: lib.rs中exit调用的main.rs是一个弱连接, 且返回值是符合exits参数的，可能是这个原因
     let p = 3u64;
     let m = 998244353u64;
     let iter: usize = 200000;

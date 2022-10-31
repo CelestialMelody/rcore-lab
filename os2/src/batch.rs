@@ -123,6 +123,9 @@ lazy_static! {
                 fn _num_apps();
             }
             let num_app_ptr = _num_apps as usize as *const usize;
+            // volatile: 直接存取原始内存地址，可以防止编译器对代码优化;
+            // see [read_volatile](https://doc.rust-lang.org/std/ptr/fn.read_volatile.html)
+            // or [c/cpp volatile](https://www.runoob.com/w3cnote/c-volatile-keyword.html)
             let num_apps = num_app_ptr.read_volatile(); // read_volatile; 对ptr的值进行易失性读取，而无需移动它
             let mut app_start: [usize; MAX_APP_NUM + 1] = [0; MAX_APP_NUM + 1];
             // app_start_raw

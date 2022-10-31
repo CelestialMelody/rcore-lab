@@ -1,3 +1,4 @@
+/// 实际该代码未使用
 #![allow(unused)]
 
 const SBI_SET_TIMER: usize = 0;

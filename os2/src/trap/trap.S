@@ -83,7 +83,7 @@ __restore:
     # restore sstatus/sepc
     ld t0, 32*8(sp) # sstatus
     ld t1, 33*8(sp) # sepc
-    ld t2, 2*8(sp) # sscratch; x2(sp) 指向 USER_STACK 栈顶
+    ld t2, 2*8(sp) # sscratch; x2(sp) 指向 USER_STACK 栈
     csrw sstatus, t0
     csrw sepc, t1
     csrw sscratch, t2
