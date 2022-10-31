@@ -19,7 +19,6 @@ fn sbi_call(which: usize, arg0: usize, arg1: usize, arg2: usize) -> usize {
     let mut ret;
     unsafe {
         core::arch::asm!(
-            "li x16, 0",
             "ecall", // ecall 指令会触发 SBI 调用
             inlateout("x10") arg0 => ret, // x10 作为输入参数，返回值保存在 x10 中
             in("x11") arg1,
