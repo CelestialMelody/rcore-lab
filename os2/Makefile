@@ -16,7 +16,7 @@ BOOTLOADER := ../bootloader/$(SBI)-$(BOARD).bin
 KERNEL_ENTRY_PA := 0x80200000
 
 # Binutils
-OBJDUMP := rust-objdump --arch-name=r
+OBJDUMP := rust-objdump --arch-name=riscv64
 OBJCOPY := rust-objcopy --binary-architecture=riscv64
 RV64_OBJDUMP := riscv64-unknown-elf-objdump
 
