@@ -13,10 +13,10 @@ ARG HOME=/root
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && \
     apt-get install -y \
-        curl \
-        git \
-        python3 \
-        wget
+    curl \
+    git \
+    python3 \
+    wget
 
 # 1. Set up QEMU RISC-V
 # - https://learningos.github.io/rust-based-os-comp2022/0setup-devel-env.html#qemu
@@ -32,10 +32,10 @@ RUN wget https://download.qemu.org/qemu-${QEMU_VERSION}.tar.xz && \
 # 1.2. Install dependencies
 # - https://risc-v-getting-started-guide.readthedocs.io/en/latest/linux-qemu.html#prerequisites
 RUN apt-get install -y \
-        autoconf automake autotools-dev curl libmpc-dev libmpfr-dev libgmp-dev \
-        gawk build-essential bison flex texinfo gperf libtool patchutils bc \
-        zlib1g-dev libexpat-dev git \
-        ninja-build pkg-config libglib2.0-dev libpixman-1-dev
+    autoconf automake autotools-dev curl libmpc-dev libmpfr-dev libgmp-dev \
+    gawk build-essential bison flex texinfo gperf libtool patchutils bc \
+    zlib1g-dev libexpat-dev git \
+    ninja-build pkg-config libglib2.0-dev libpixman-1-dev
 
 # 1.3. Build and install from source
 WORKDIR ${HOME}/qemu-${QEMU_VERSION}
@@ -101,10 +101,12 @@ RUN rustup component add llvm-tools-preview
 # 6. debug tools
 RUN apt-get update && \
     apt-get install -y \
-        python3-pip \
-        vim \
-        tmux
+    python3-pip \
+    vim \
+    tmux
 RUN pip3 install pygments
+
+RUN cargo install cargo-binutils --vers ~0.3
 
 # Ready to go
 WORKDIR ${HOME}
