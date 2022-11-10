@@ -53,10 +53,18 @@ pub extern "C" fn _start() -> ! {
 // UNKWON: 用户库的main返回值并非是符合exits参数的
 // 1. 用户的main与这里的main有什么关系吗？
 // 2. 用户的main退出时与这里的exit有什么关系吗？
+// 猜测这里是因为 `extern "C" `的原因：c abi 的话可能只会检查函数名，并没有严格检查参数与返回值类型。
 #[linkage = "weak"] // -> add #![feature(linkage)]
 #[no_mangle]
 fn main() -> i32 {
     panic!("main() not defined in apps!");
+}
+
+pub fn sleep(period_ms: usize) {
+    let start = get_time();
+    while get_time() < start + period_ms as isize {
+        sys_yield();
+    }
 }
 
 pub fn exit(code: i32) -> ! {
@@ -69,4 +77,12 @@ pub fn read(fd: usize, buf: &mut [u8]) -> isize {
 
 pub fn write(fd: usize, buf: &[u8]) -> isize {
     sys_write(fd, buf)
+}
+
+pub fn yield_() -> isize {
+    sys_yield()
+}
+
+pub fn get_time() -> isize {
+    sys_get_time()
 }
