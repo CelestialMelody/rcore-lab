@@ -27,6 +27,9 @@ SECTIONS
         *(.sbss .sbss.*)
         end_bss = .;
     }
+    /* 
+        DISCARD: 用于丢弃一些不需要的段
+    */
     /DISCARD/ : {
         *(.eh_frame)
         *(.debug*)
