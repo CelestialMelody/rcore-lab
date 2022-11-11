@@ -78,6 +78,7 @@ impl TaskManager {
         let mut inner = self.inner.exclusive_access();
         let curr_task_id = inner.current_task;
         inner.tasks[curr_task_id].task_status = TaskStatus::Ready;
+        // no need drop inner, because it will be dropped when out of scope
     }
 
     /// change the status of next task form Ready to Exited
@@ -94,17 +95,17 @@ impl TaskManager {
         let inner = self.inner.exclusive_access();
         let curr_task_id = inner.current_task;
 
-        (curr_task_id + 1..self.num_apps + 1)
+        //fix: BUG (for sys_yield)
+        (curr_task_id + 1..curr_task_id + self.num_apps + 1)
             .map(|id| id % self.num_apps) // 保证 id 一定在 [0, self.num_apps) 范围内
             .find(|&id| inner.tasks[id].task_status == TaskStatus::Ready)
     }
 
     fn run_next_task(&self) {
-        if let Some(next) = self.find_next_task() {
+        if let Some(next_task_id) = self.find_next_task() {
             let mut inner = self.inner.exclusive_access();
 
             let curr_task_id = inner.current_task;
-            let next_task_id = next;
 
             let curr_task_cx_ptr = &mut inner.tasks[curr_task_id].task_cx as *mut TaskContext;
             let next_task_cx_ptr = &inner.tasks[next_task_id].task_cx as *const TaskContext;
@@ -116,6 +117,10 @@ impl TaskManager {
 
             inner.current_task = next_task_id;
 
+            /// 因为一般情况下它是在函数退出之后才会被自动释放，从而 TASK_MANAGER 的 inner 字段得以回归到未被借用的状态，之后可以再借用。
+            /// 如果不手动 drop 的话，编译器会在 __switch 返回时，也就是当前应用被切换回来的时候才 drop，这期间我们都不能修改 TaskManagerInner ，
+            /// 甚至不能读（因为之前是可变借用），会导致内核 panic 报错退出。
+            /// 正因如此，我们需要在 __switch 前提早手动 drop 掉 inner
             drop(inner); // drop the local variable inner
 
             unsafe {
