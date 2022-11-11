@@ -85,8 +85,13 @@ fn rust_main() -> ! {
     heap_alloc::init();
     trap::init();
     loader::load_apps();
+
+    // 为了避免 S 特权级时钟中断被屏蔽，需要在内核态下开启时钟中断
+    // 设置了 sie.stie 使得 S 特权级时钟中断不会被屏蔽
     trap::enable_timer_interrupt();
+    // 设置第一个 10ms 的计时器
     timer::set_next_trigger();
+
     task::run_first_task();
 
     panic!("Unreachable in rust_main!");
