@@ -18,7 +18,6 @@ fn sbi_call(which: usize, arg0: usize, arg1: usize, arg2: usize) -> usize {
     let mut ret;
     unsafe {
         core::arch::asm!(
-            // "li x16, 0",
             "ecall", // ecall 指令会触发 SBI 调用
             inlateout("x10") arg0 => ret, // x10 作为输入参数，返回值保存在 x10 中
             in("x11") arg1,
@@ -39,6 +38,7 @@ pub fn console_getchar() -> usize {
     sbi_call(SBI_CONSOLE_GETCHAR, 0, 0, 0)
 }
 
+/// 由 SEE 提供的标准 SBI 接口函数，可以用来设置 mtimecmp 的值
 pub fn set_timer(stime_value: usize) {
     sbi_call(SBI_SET_TIEMR, stime_value, 0, 0);
 }
