@@ -5,27 +5,36 @@ OBJCOPY := rust-objcopy --binary-architecture=riscv64
 PY := python3
 BUILD_DIR := build
 
-BASE ?= 0
+BASE ?= 1
 CHAPTER ?= 3
-TEST ?= $(CHAPTER)
+# TEST ?= $(CHAPTER)
 
 APP_DIR := src/bin
 TARGET_DIR := target/$(TARGET)/$(MODE)
 
-APPS := $(wildcard $(APP_DIR)/*.rs)
-ELFS := $(patsubst $(APP_DIR)/%.rs, $(TARGET_DIR)/%, $(APPS))
-BINS := $(patsubst $(APP_DIR)/%.rs, $(TARGET_DIR)/%.bin, $(APPS))
-
 # TESTS is a list of numbers. 0..=CHAPTER is the default.
-TESTS := $(shell seq $(BASE) $(TEST))
-ifeq ($(BASE), 0) # Normal tests only
-	APPS := $(foreach T, $(TESTS), $(wildcard $(APP_DIR)/ch$(T)_*.rs))
-else ifeq ($(BASE), 1) # Basic tests only
-	APPS := $(foreach T, $(TESTS), $(wildcard $(APP_DIR)/ch$(T)b_*.rs))
-else # Basic and normal
-	APPS := $(foreach T, $(TESTS), $(wildcard $(APP_DIR)/ch$(T)*.rs))
+# TESTS := $(shell seq $(BASE) $(TEST))
+# ifeq ($(BASE), 0) # Normal tests only
+# 	APPS := $(foreach T, $(TESTS), $(wildcard $(APP_DIR)/ch$(T)_*.rs))
+# else ifeq ($(BASE), 1) # Basic tests only
+# 	APPS := $(foreach T, $(TESTS), $(wildcard $(APP_DIR)/ch$(T)b_*.rs))
+# else # Basic and normal
+# 	APPS := $(foreach T, $(TESTS), $(wildcard $(APP_DIR)/ch$(T)*.rs))
+# endif
+
+# Normal tests only
+ifeq ($(BASE), 0) 
+	APPS := $(wildcard $(APP_DIR)/ch$(CHAPTER)_*.rs)
+# Basic tests only
+else ifeq ($(BASE), 1) 
+	APPS := $(wildcard $(APP_DIR)/ch$(CHAPTER)b_*.rs)
+# Basic and normal
+else 
+	APPS := $(wildcard $(APP_DIR)/ch$(CHAPTER)*.rs)
 endif
 
+ELFS := $(patsubst $(APP_DIR)/%.rs, $(TARGET_DIR)/%, $(APPS))
+BINS := $(patsubst $(APP_DIR)/%.rs, $(TARGET_DIR)/%.bin, $(APPS))
 binary:
 	@echo $(ELFS)
 	@if [ ${CHAPTER} -gt 3 ]; then \
