@@ -89,14 +89,13 @@ WORKDIR ${HOME}/riscv-gnu-toolchain
 ENV RISCV_GNU_TOOLCHAIN_HOME=/usr/local/riscv-gnu-toolchain \
     PATH=/usr/local/riscv-gnu-toolchain/bin:$PATH
 RUN    ./configure --prefix=/usr/local/riscv-gnu-toolchain && make -j$(nproc)
+# RUN export PATH="$PATH:/usr/local/opt/riscv-gnu-toolchain/bin"
 
 # 5. build env
 RUN (rustup target list | grep "riscv64gc-unknown-none-elf (installed)") || rustup target add riscv64gc-unknown-none-elf
 RUN cargo install cargo-binutils --vers ~0.3
 RUN rustup component add rust-src
 RUN rustup component add llvm-tools-preview
-
-# RUN export PATH="$PATH:/usr/local/opt/riscv-gnu-toolchain/bin"
 
 # 6. debug tools
 RUN apt-get update && \
@@ -105,8 +104,6 @@ RUN apt-get update && \
     vim \
     tmux
 RUN pip3 install pygments
-
-RUN cargo install cargo-binutils --vers ~0.3
 
 # Ready to go
 WORKDIR ${HOME}
