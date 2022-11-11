@@ -16,6 +16,7 @@ fn main() -> i32 {
     assert!(current_time > 0);
     println!("get_time OK! {}", current_time);
     let wait_for = current_time + 3000;
+    // 先通过 yield 来优化 轮询 (Busy Loop) 过程带来的 CPU 资源浪费
     while get_time() < wait_for {
         yield_();
     }
