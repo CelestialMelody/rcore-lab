@@ -45,8 +45,11 @@ kernel:
 	@make -C ../user build TEST=$(TEST) CHAPTER=$(CHAPTER) BASE=$(BASE)
 	@cargo build --release
 
+LINK_APP_S := src/link_app.S
+
 clean:
 	@cargo clean
+	@cat /dev/null > $(LINK_APP_S)
 
 run: build
 	@qemu-system-riscv64 \
