@@ -34,18 +34,22 @@ $(KERNEL_BIN): kernel
 disasm:
 	@$(OBJDUMP) $(KERNEL_ELF) -S > $(KERNEL_ELF).asm
 
+# no need
 env:
-	(rustup target list | grep "riscv64gc-unknown-none-elf (installed)") || rustup target add $(TARGET)
-	cargo install cargo-binutils --vers ~0.3
-	rustup component add rust-src
-	rustup component add llvm-tools-preview
+# 	(rustup target list | grep "riscv64gc-unknown-none-elf (installed)") || rustup target add $(TARGET)
+# 	cargo install cargo-binutils --vers ~0.3
+# 	rustup component add rust-src
+# 	rustup component add llvm-tools-preview
 
 kernel:
 	@make -C ../user build TEST=$(TEST) CHAPTER=$(CHAPTER) BASE=$(BASE)
 	@cargo build --release
 
+LINK_APP_S := src/link_app.S
+
 clean:
 	@cargo clean
+	@cat /dev/null > $(LINK_APP_S)
 
 run: build
 	@qemu-system-riscv64 \
@@ -55,7 +59,6 @@ run: build
 		-device loader,file=$(KERNEL_BIN),addr=$(KERNEL_ENTRY_PA)
 
 debug: build
-	@cp ../.gdbinit .
 	@tmux new-session -d \
 		"qemu-system-riscv64 -machine virt -nographic -bios $(BOOTLOADER) -device loader,file=$(KERNEL_BIN),addr=$(KERNEL_ENTRY_PA) -s -S" && \
 		tmux split-window -h "riscv64-unknown-elf-gdb -ex 'file $(KERNEL_ELF)' -ex 'set arch riscv:rv64' -ex 'target remote localhost:1234'" && \
