@@ -117,10 +117,10 @@ impl TaskManager {
 
             inner.current_task = next_task_id;
 
-            /// 因为一般情况下它是在函数退出之后才会被自动释放，从而 TASK_MANAGER 的 inner 字段得以回归到未被借用的状态，之后可以再借用。
-            /// 如果不手动 drop 的话，编译器会在 __switch 返回时，也就是当前应用被切换回来的时候才 drop，这期间我们都不能修改 TaskManagerInner ，
-            /// 甚至不能读（因为之前是可变借用），会导致内核 panic 报错退出。
-            /// 正因如此，我们需要在 __switch 前提早手动 drop 掉 inner
+            // 因为一般情况下它是在函数退出之后才会被自动释放，从而 TASK_MANAGER 的 inner 字段得以回归到未被借用的状态，之后可以再借用。
+            // 如果不手动 drop 的话，编译器会在 __switch 返回时，也就是当前应用被切换回来的时候才 drop，这期间我们都不能修改 TaskManagerInner ，
+            // 甚至不能读（因为之前是可变借用），会导致内核 panic 报错退出。
+            // 正因如此，我们需要在 __switch 前提早手动 drop 掉 inner
             drop(inner); // drop the local variable inner
 
             unsafe {
