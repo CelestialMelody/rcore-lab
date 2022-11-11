@@ -10,7 +10,6 @@ pub struct TimeVal {
     pub usec: usize,
 }
 
-#[warn(dead_code)]
 pub struct TaskInfo {
     status: TaskStatus,
     syscall_times: [u32; MAX_SYSCALL_NUM],
