@@ -1,4 +1,3 @@
 *dump.s
 .gdbinit
 .vscode/*
-./src/link_app.S
