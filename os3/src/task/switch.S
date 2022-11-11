@@ -1,8 +1,10 @@
 .altmacro
 .macro SAVE_SN n
+    # n+2: save reg[s], so skip sp, ra -> see TaskContext
     sd s\n, (\n+2)*8(a0)
 .endm
 .macro LOAD_SN n
+    # n+2: load reg[s], so skip sp, ra -> see TaskContext
     ld s\n, (\n+2)*8(a1)
 .endm
     .section .text
@@ -28,6 +30,8 @@ __switch:
 
     # part [2] 
     # save kernel stack of current task
+    # a0 = current_task_cx_ptr
+    # add 8: skip TaskStatus -> see TaskControlBlock
     sd sp, 8(a0)
     # save ra & s0~s11 of current execution
     sd ra, 0(a0)
@@ -38,6 +42,7 @@ __switch:
     .endr
 
     # part [3] 
+    # a1 = next_task_cx_ptr
     # restore ra & s0~s11 of next execution
     ld ra, 0(a1)
     .set n, 0
@@ -48,6 +53,7 @@ __switch:
 
     # part [4] 
     # restore kernel stack of next task
+    # add 8: skip TaskStatus -> see TaskControlBlock
     ld sp, 8(a1)
     ret
 

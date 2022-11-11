@@ -54,9 +54,14 @@ lazy_static! {
 }
 
 impl TaskManager {
+    /// 类似构造 Trap 上下文的方法，内核需要在应用的任务控制块上构造一个用于第一次执行的任务上下文；
+    /// 对于每个任务，我们先调用 `init_app_cx` 构造该任务的 Trap 上下文（包括应用入口地址和用户栈指针）并将其压入到内核栈顶；
+    /// 接着调用 `TaskContext::goto_restore` 来构造每个任务保存在任务控制块中的任务上下文：它设置任务上下文中的内核栈指针将任务上下文的 `ra` 寄存器设置为 `__restore` 的入口地址。这样，在 `__switch` 从它上面恢复并返回之后就会直接跳转到 `__restore` ，此时栈顶是一个我们构造出来第一次进入用户态执行的 Trap 上下文，就和第二章的情况一样了。
     fn run_first_task(&self) -> ! {
         // get the first task
         let mut inner = self.inner.exclusive_access();
+
+        // 取出即将最先执行的编号为 0 的应用的任务上下文指针 next_task_cx_ptr 并希望能够切换过去
         let task_zero = &mut inner.tasks[0];
         task_zero.task_status = TaskStatus::Running;
 
@@ -65,7 +70,11 @@ impl TaskManager {
         drop(inner); // 释放 exclusive_access() 的锁
 
         // run the first task
+        // 在 run_first_task 的时候，我们并没有执行任何应用， __switch 前半部分的保存仅仅是在启动栈上保存了一些之后不会用到的数据，自然也无需记录启动栈栈顶的位置。
+        // 因此，我们显式在启动栈上分配了一个名为 `_unused` 的任务上下文，并将它的地址作为第一个参数传给 `__switch` ，这样保存一些寄存器之后的启动栈栈顶的位置将会保存在此变量中。
+        // 然而无论是此变量还是启动栈我们之后均不会涉及到，一旦应用开始运行，我们就开始在应用的用户栈和内核栈之间开始切换了。这里声明此变量的意义仅仅是为了避免覆盖到其他数据。
         let mut _unused_cx = TaskContext::init();
+
         unsafe {
             __switch(&mut _unused_cx as *mut TaskContext, next_task_cx_ptr);
         }
