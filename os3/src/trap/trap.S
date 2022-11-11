@@ -75,6 +75,8 @@ __alltraps:
 __restore:
     # case1: start running app by __restore
     # case2: back to U after handling trap
+    #  __restore 的实现需要做出变化：它不再需要 在开头 mv sp, a0 了
+    # 因为在 __switch 之后, sp 就已经正确指向了我们需要的 Trap 上下文地址
     # mv sp, a0 # 传入参数a0: 内核栈中保存的用户上下文; os3 delete this
 
     # now sp->kernel stack(after allocated), sscratch->user stack

@@ -82,6 +82,9 @@ pub fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
         }
         Trap::Interrupt(Interrupt::SupervisorTimer) => {
             // 时钟中断
+            // 在 trap_handler 函数下新增一个条件分支跳转，当发现触发了一个 S 特权级时钟中断的时候，
+            // 首先重新设置一个 10ms 的计时器，
+            // 然后调用 suspend_current_and_run_next 函数暂停当前应用并切换到下一个。
             set_next_trigger();
             suspend_current_and_run_next();
         }
