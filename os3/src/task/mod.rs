@@ -31,11 +31,13 @@ struct TaskManagerInner {
 lazy_static! {
     pub static ref TASK_MANAGER: TaskManager = {
         let num_apps = get_num_apps();
+
         let mut tasks = [TaskControlBlock{
             task_cx: TaskContext::init(),
             task_status: TaskStatus::UnInit,
         }; MAX_APP_NUM];
 
+        // we can see that every task has its own stack
         for (i, t) in tasks.iter_mut().enumerate().take(num_apps) { // take(num_apps) 保证只初始化 num_apps 个任务; iterater::take() 用于限制迭代器的长度
             t.task_cx = TaskContext::goto_restore(init_app_cx(i)); // 初始化任务上下文
             t.task_status = TaskStatus::Ready;
@@ -56,7 +58,10 @@ lazy_static! {
 impl TaskManager {
     /// 类似构造 Trap 上下文的方法，内核需要在应用的任务控制块上构造一个用于第一次执行的任务上下文；
     /// 对于每个任务，我们先调用 `init_app_cx` 构造该任务的 Trap 上下文（包括应用入口地址和用户栈指针）并将其压入到内核栈顶；
-    /// 接着调用 `TaskContext::goto_restore` 来构造每个任务保存在任务控制块中的任务上下文：它设置任务上下文中的内核栈指针将任务上下文的 `ra` 寄存器设置为 `__restore` 的入口地址。这样，在 `__switch` 从它上面恢复并返回之后就会直接跳转到 `__restore` ，此时栈顶是一个我们构造出来第一次进入用户态执行的 Trap 上下文，就和第二章的情况一样了。
+    /// 接着调用 `TaskContext::goto_restore` 来构造每个任务保存在任务控制块中的任务上下文：
+    /// 它设置任务上下文中的内核栈指针将任务上下文的 `ra` 寄存器设置为 `__restore` 的入口地址,
+    /// 这样，在 `__switch` 从它上面恢复并返回之后就会直接跳转到 `__restore` ，
+    /// 此时栈顶是一个我们构造出来第一次进入用户态执行的 Trap 上下文，就和第二章的情况一样了。
     fn run_first_task(&self) -> ! {
         // get the first task
         let mut inner = self.inner.exclusive_access();
@@ -141,6 +146,9 @@ impl TaskManager {
     }
 }
 
+/// call from rust_main,
+/// before call this function,
+/// use lazy_static to init TASK_MANAGER
 pub fn run_first_task() {
     TASK_MANAGER.run_first_task()
 }

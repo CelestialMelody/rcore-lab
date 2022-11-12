@@ -13,6 +13,7 @@ struct UserStack {
     data: [u8; USER_STACK_SIZE],
 }
 
+// we can see that every task has its own stack
 static mut KERNEL_STACK: [KernelStack; MAX_APP_NUM] = [KernelStack {
     data: [0; KERNEL_STACK_SIZE],
 }; MAX_APP_NUM];
