@@ -76,8 +76,10 @@ RUN rustup --version && \
 # 3. Build env for labs
 # See os1/Makefile `env:` for example.
 # This avoids having to wait for these steps each time using a new container.
-RUN rustup target add riscv64gc-unknown-none-elf && \
-    cargo install cargo-binutils --vers ~0.2 && \
+# so when you have build the image, you can remove(delete) os/Makfile `env:` steps
+RUN (rustup target list | grep "riscv64gc-unknown-none-elf (installed)") || rustup target add riscv64gc-unknown-none-elf && \
+    rustup target add riscv64gc-unknown-none-elf && \
+    cargo install cargo-binutils --vers ~0.3 && \
     rustup component add rust-src && \
     rustup component add llvm-tools-preview
 
@@ -91,21 +93,15 @@ ENV RISCV_GNU_TOOLCHAIN_HOME=/usr/local/riscv-gnu-toolchain \
 RUN    ./configure --prefix=/usr/local/riscv-gnu-toolchain && make -j$(nproc)
 # RUN export PATH="$PATH:/usr/local/opt/riscv-gnu-toolchain/bin"
 
-# 5. build env
-RUN (rustup target list | grep "riscv64gc-unknown-none-elf (installed)") || rustup target add riscv64gc-unknown-none-elf
-RUN cargo install cargo-binutils --vers ~0.3
-RUN rustup component add rust-src
-RUN rustup component add llvm-tools-preview
-
-# 6. debug tools
+# 5. debug tools
 RUN apt-get update && \
     apt-get install -y \
     python3-pip \
     vim \
     tmux
-RUN pip3 install pygments
+# RUN pip3 install pygments
 
-# 7. add tools
+# 6. add tools
 # [1] use dtc to get CLOCK_FREQ in qemu
 RUN apt-get install device-tree-compiler -y
 

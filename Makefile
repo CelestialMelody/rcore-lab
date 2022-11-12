@@ -22,8 +22,8 @@ setup:
 	cp -r easy-fs-fuse ${DIR}
 	cp -r ci-user ${DIR}
 	cp -r bootloader ${DIR}
-	cp -r reports ${DIR}
-	cp rust-toolchain ${DIR}
+#	cp -r reports ${DIR}
+#	cp rust-toolchain ${DIR}
 #	export PATH=${PATH}:${HOME}/qemu-7.0.0:${HOME}/qemu-7.0.0/riscv64-softmmu
 
 test1: setup
