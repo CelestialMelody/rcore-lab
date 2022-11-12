@@ -35,6 +35,7 @@ endif
 
 ELFS := $(patsubst $(APP_DIR)/%.rs, $(TARGET_DIR)/%, $(APPS))
 BINS := $(patsubst $(APP_DIR)/%.rs, $(TARGET_DIR)/%.bin, $(APPS))
+
 binary:
 	@echo $(ELFS)
 	@if [ ${CHAPTER} -gt 3 ]; then \
