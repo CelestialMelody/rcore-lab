@@ -2,7 +2,7 @@ use crate::config::CLOCK_FREQ;
 use crate::sbi::set_timer;
 use riscv::register::time;
 
-const TICKS_PRE_SECOND: usize = 100;
+const TICKS_PRE_SECOND: usize = 100; // can change this value to change the time slice
 const MICRO_PRE_SECOND: usize = 1_000_000;
 
 /// read the mtime register:
@@ -29,5 +29,8 @@ pub fn get_time_micro() -> usize {
 /// CLOCK_FREQ: the number of ticks in 1s;
 /// CLOCK_FREQ / TICKS_PRE_SECOND: number of ticks in 10ms.
 pub fn set_next_trigger() {
+    // get_time: get mtime value
+    // set_timer: set mtimecmp value
+    // time interrupt will be triggered when mtime == mtimecmp
     set_timer(get_time() + (CLOCK_FREQ / TICKS_PRE_SECOND));
 }
