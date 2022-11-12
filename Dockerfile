@@ -105,5 +105,9 @@ RUN apt-get update && \
     tmux
 RUN pip3 install pygments
 
+# 7. add tools
+# [1] use dtc to get CLOCK_FREQ in qemu
+RUN apt-get install device-tree-compiler -y
+
 # Ready to go
 WORKDIR ${HOME}
