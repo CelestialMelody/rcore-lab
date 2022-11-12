@@ -21,7 +21,8 @@ OBJCOPY := rust-objcopy --binary-architecture=riscv64
 RV64_OBJDUMP := riscv64-unknown-elf-objdump
 
 # os2: add
-CHAPTER ?= $(shell git rev-parse --abbrev-ref HEAD | grep -oP 'ch\K[0-9]')
+# CHAPTER ?= $(shell git rev-parse --abbrev-ref HEAD | grep -oP 'ch\K[0-9]')
+CHAPTER ?= 2
 TEST ?= $(CHAPTER)
 BASE ?= 1
 
@@ -35,10 +36,10 @@ disasm:
 	@$(OBJDUMP) $(KERNEL_ELF) -S > $(KERNEL_ELF).asm
 
 env:
-	(rustup target list | grep "riscv64gc-unknown-none-elf (installed)") || rustup target add $(TARGET)
-	cargo install cargo-binutils --vers ~0.3
-	rustup component add rust-src
-	rustup component add llvm-tools-preview
+#	(rustup target list | grep "riscv64gc-unknown-none-elf (installed)") || rustup target add $(TARGET)
+#	cargo install cargo-binutils --vers ~0.3
+#	rustup component add rust-src
+#	rustup component add llvm-tools-preview
 
 # os2: add make -C
 kernel:
