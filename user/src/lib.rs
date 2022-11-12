@@ -12,6 +12,27 @@ mod syscall;
 // extern crate alloc;
 use syscall::*;
 
+#[repr(C)]
+#[derive(Debug, Default)]
+pub struct TimeVal {
+    pub sec: usize,
+    pub usec: usize,
+}
+
+impl TimeVal {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub enum TaskStatus {
+    UnInit,
+    Ready,
+    Running,
+    Exited,
+}
+
 #[alloc_error_handler]
 pub fn handle_alloc_error(layout: core::alloc::Layout) -> ! {
     panic!("Heap allocation error, layout = {:?}", layout);
@@ -84,5 +105,9 @@ pub fn yield_() -> isize {
 }
 
 pub fn get_time() -> isize {
-    sys_get_time()
+    let time = TimeVal::new();
+    match sys_get_time(&time, 0) {
+        0 => ((time.sec & 0xffff) * 1000 + time.usec / 1000) as isize, // return 0 when os syscall: sys_get_time success
+        _ => -1,
+    }
 }

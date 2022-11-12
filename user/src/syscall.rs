@@ -5,6 +5,8 @@ pub const SYSCALL_EXIT: usize = 93;
 pub const SYSCALL_YIELD: usize = 124;
 pub const SYSCALL_GET_TIME: usize = 169;
 
+use super::TimeVal;
+
 /// 所有的系统调用都封装成 syscall 函数，支持传入 syscall ID 和 3 个参数
 pub fn syscall(id: usize, args: [usize; 3]) -> isize {
     let mut ret: isize;
@@ -60,6 +62,6 @@ pub fn sys_yield() -> isize {
     syscall(SYSCALL_YIELD, [0, 0, 0])
 }
 
-pub fn sys_get_time() -> isize {
-    syscall(SYSCALL_GET_TIME, [0, 0, 0])
+pub fn sys_get_time(time: &TimeVal, tz: usize) -> isize {
+    syscall(SYSCALL_GET_TIME, [time as *const _ as usize, tz, 0])
 }
