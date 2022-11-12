@@ -38,7 +38,7 @@ pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
 
     unsafe {
         *ts = TimeVal {
-            sec: time / 1_000_000,
+            sec: time / 1_000_000, // us -> second
             usec: time % 1_000_000,
         };
     }
