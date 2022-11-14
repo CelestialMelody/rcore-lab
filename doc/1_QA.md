@@ -1,3 +1,57 @@
+如何运行
+
+```shell
+make env
+make kernel
+make run
+```
+
+
+
+```makefile
+env:
+
+	(rustup target list | grep "riscv64gc-unknown-none-elf (installed)") || rustup target add $(TARGET)
+	cargo install cargo-binutils --vers ~0.3
+	rustup component add rust-src
+	rustup component add llvm-tools-preview
+```
+
+
+
+```makefile
+kernel:
+	cargo build --release
+```
+
+
+
+```makefile
+run: build
+	qemu-system-riscv64 \
+		-machine virt \
+		-nographic \
+		-bios $(BOOTLOADER) \
+		-device loader,file=$(KERNEL_BIN),addr=$(KERNEL_ENTRY_PA)
+```
+
+
+
+```makefile
+debug: build
+	tmux new-session -d \
+		"qemu-system-riscv64 -machine virt -nographic -bios $(BOOTLOADER) -device loader,file=$(KERNEL_BIN),addr=$(KERNEL_ENTRY_PA) -s -S" && \
+		tmux split-window -h "riscv64-unknown-elf-gdb -ex 'file $(KERNEL_ELF)' -ex 'set arch riscv:rv64' -ex 'target remote localhost:1234'" && \
+		tmux -2 attach-session -d
+
+```
+
+
+
+
+
+---
+
 **bios和sbi是什么样的关系**
 
 > [解释者](https://github.com/denglj)
@@ -121,3 +175,4 @@
 > ra 调用者保存寄存器，在函数的开头和结尾保存/恢复
 >
 > 寄存器调用规范
+

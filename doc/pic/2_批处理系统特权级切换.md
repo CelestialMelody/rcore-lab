@@ -1,0 +1,310 @@
+# 批处理操作系统——特权级切换
+
+## 系统调用
+
+我们讨论操作系统（rcore-os2）的特权级切换。目前我们实现的批处理系统的系统调用主要有两个：sys_write 与 sys_exit。特权级切换主要发生在调用 sys_write 时。
+
+当应用程序调用 `println!` 或者 `print!` 宏时，会去调用 `sys_write`，接着会去调用 `syscall`。
+
+接着 syscall 会去执行 ecall 指令，从用户态陷入到内核态。
+
+<img src="./pic\print.png" alt="print" style="zoom: 40%;" />
+
+```rust
+// user/src/lib.rs
+pub fn write(fd: usize, buf: &[u8]) -> isize {
+    sys_write(fd, buf)
+}
+
+// user/src/syscall.rs
+pub fn sys_write(fd: usize, buf: &[u8]) -> isize {
+    syscall(SYSCALL_WRITE, [fd, buf.as_ptr() as usize, buf.len()])
+}
+
+// user/src/syscall.rs
+pub fn syscall(id: usize, args: [usize; 3]) -> isize {
+    let mut ret: isize;
+    unsafe {
+        core::arch::asm!(
+            "ecall", // `ecall` 指令触发 Trap
+            inlateout ("x10") args[0] => ret, // `a0` 保存系统调用的返回值
+            in ("x11") args[1],
+            in ("x12") args[2],
+            in ("x17") id, // `a7` 用来传递 syscall ID
+        );
+    }
+    ret
+}
+```
+
+> 这里额外补充一点点 risc-v 的知识：
+>
+> 当 CPU 执行 `ecall` 并准备从用户特权级 陷入（ `Trap` ）到 S 特权级的时候，硬件会自动完成如下这些事情：
+>
+> - `sstatus` 的 `SPP` 字段会被修改为 CPU 当前的特权级（U/S）；
+> - `sepc` 会被修改为 Trap 处理完成后默认会执行的下一条指令的地址；
+> - `scause/stval` 分别会被修改成这次 Trap 的原因以及相关的附加信息；
+> - CPU 会跳转到 `stvec` 所设置的 Trap 处理入口地址，并将当前特权级设置为 S ，然后从Trap 处理入口地址处开始执行。
+>
+> 我们看到进程发起系统调用时，在 syscall 中嵌入了一行 `ecall` 指令。执行 `ecall` 指令会触发 Trap，然后去寻找 `stvec` 寄存器保存的中断处理程序入口，也就是我们的 `__alltraps` 这部分。在这里，我们需要关注一下 `stvec`，在 RV64 中， `stvec` 是一个 64 位的 CSR，在中断使能的情况下，保存了中断处理的入口地址。
+
+## 进程上下文的保存与恢复
+
+我们在 os/src/trap/mod.rs 的 `init()` 函数中，将中断处理程序的入口地址保存在寄存器 stvec 中。如图：
+
+<img src="./pic\process_switching.png" alt="process_switching" style="zoom: 50%;" />
+
+此时，我们进入 __alltraps 阶段。
+
+进入 S 特权级的 Trap 处理之前，必须保存原控制流的寄存器状态，这一般通过内核栈来保存。首先通过 `__alltraps` 将 Trap 上下文保存在内核栈上。
+
+### 保存进程上下文
+
+接下来让我们详细看看 `__alltraps`
+
+```assembly
+__alltraps:
+    # 交换 sscratch 和 sp 的值
+    csrrw sp, sscratch, sp
+
+    # 内核栈分配
+    addi sp, sp, -34*8
+    # skip x0, x0 被硬编码为 0
+    sd x1, 1*8(sp)
+    # skip sp(x2), 即 sp, 需要使用 sp2 来找到每个寄存器应该被保存到的正确的位置, 之后保存
+    sd x3, 3*8(sp)
+    # skip tp(x4), 并不会使用到
+    # 按照 TrapContext 结构体的内存布局，基于内核栈的位置（sp所指地址）来从低地址到高地址分别按顺序放置 x0~x31这些通用寄存器
+    .set n, 5
+    .rept 27
+        SAVE_GP %n
+        .set n, n+1
+    .endr
+
+    # 指令 csrr rd, csr 的功能就是将 CSR 的值读到寄存器 rd 中。
+    # 这里我们不用担心 t0(x5) 和 t1(x6) 被覆盖，因为它们刚刚已经被保存了
+    csrr t0, sstatus
+    csrr t1, sepc
+
+    sd t0, 32*8(sp)   # sstatus
+    sd t1, 33*8(sp)   # sepc
+    csrr t2, sscratch # 将 sscratch 的值读到寄存器 t2
+    sd t2, 2*8(sp)    # 保存到内核栈上
+    # 注意： sscratch 的值是进入 Trap 之前的 sp 的值，指向用户栈。而现在的 sp 则指向内核栈。
+    mv a0, sp # 寄存器 a0 指向内核栈的栈顶 sp
+    call trap_handler
+```
+
+让我们来分析 + 图解几个比较关键的代码部分：
+
+- 首先在执行 `__alltraps` 之前，寄存器 sp 执行用户栈某处，sscratch 指向 `KERNERL_STACK`栈顶。这里 sscratch 为什么指向的这个位置我们暂且 *按下不表*，我们会在下一章，应用程序切换的分析时，看到为什么是这样的:)
+
+  <img src="./pic/__alltraps_1.png" alt="__alltraps_1" style="zoom:50%;" />
+
+- `csrrw sp, sscratch, sp`：交换 sscratch 和 sp 的值;
+
+  `addi sp, sp, -34*8`：RISC-V 架构中，栈是从高地址向低地址增长的，因此这里先减去 `TrapContext` 的大小，然后将 sp 指向这个位置，以进行内核栈分配。
+
+  > 寄存器 sp 指向内核栈并分配了一块空间，这块空间的大小实际就是保存的上下文大小
+  >
+  > ```rust
+  > // os/src/trap/context.rs
+  > 
+  > # [repr(C)] // C 内存布局
+  > // size = 34 * 8 Bytes -> see trap.S
+  > pub struct TrapContext {
+  >     pub x: [usize; 32],
+  >     pub sstatus: Sstatus,
+  >     pub sepc: usize,
+  > }
+  > ```
+
+  <img src="./pic\__alltraps_2.png" alt="__alltraps_2" style="zoom:50%;" />
+
+  > 注意：此时寄存器 sscratch 保存了应用程序发起系统调用(异常)前，寄存器 sp 保存的值。
+
+- 接下来依次保存相关寄存器。
+
+- `csrr t2, sscratch` 与 `sd t2, 2*8(sp)`：将 sscratch 的值保存在内核栈上（即cx.x[2]）
+
+  <img src="./pic/__alltraps_3.png" alt="__alltraps_3" style="zoom:50%;" />
+
+  前面提到，此时 sscracth 保存的值为发起系统调用前，寄存器 sp 保存的值。
+
+- `mv a0, sp `：寄存器 a0 指向内核栈的栈顶 sp。
+
+  - 让寄存器 a0 指向内核栈的栈指针也就是我们刚刚保存的 Trap 上下文的地址，这是由于我们接下来要调用 `trap_handler` 进行 Trap 处理，它的第一个参数 cx 由调用规范要从 a0 中获取。
+
+  - Trap 处理函数 `trap_handler` 需要 Trap 上下文的原因在于：它需要知道其中某些寄存器的值，比如在系统调用的时候应用程序传过来的 syscall ID 和对应参数。我们不能直接使用这些寄存器现在的值，因为它们可能已经被修改了，因此要去内核栈上找已经被保存下来的值。
+
+- `call trap_handler`：跳转到使用 Rust 编写的 `trap_handler` 函数完成 Trap 分发及处理。
+
+
+
+### trap_handler
+
+我们通过寄存器 a0，将应用程序的上下文传递到 `tarp_handler` 中。
+
+```rust
+// os/src/trap/mod.rs
+
+pub fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
+ Trap::Exception(Exception::UserEnvCall) => {
+            // 在 __restore 的时候 sepc 在恢复之后就会指向 ecall 的下一条指令，并在 sret 之后从那里开始执行。
+            cx.sepc += 4;
+            cx.x[10] = syscall(cx.x[17], [cx.x[10], cx.x[11], cx.x[12]]) as usize; // x10(a0) 保存返回值，这里系统调用的返回值，保存在用户的上下文的寄存器 x10(a0) 中
+        }
+    }
+    cx // 最后的返回值与传入的参数均为 cx，故 寄存器 a0 值不变
+}
+```
+
+当 `trap_handler` 通过 `scause` 寄存器的值了解到 trap 的原因后会去，根据应用程序上下文寄存器 x17(a7) 的值，执行相应的 syscall 处理函数。
+
+```rust
+// os/src/syscall/mod.rs
+pub fn syscall(syscall_id: usize, args: [usize; 3]) -> isize {
+    match syscall_id {
+        SYSCALL_WRITE => sys_write(args[0], args[1] as *const u8, args[2]),
+        SYSCALL_EXIT => sys_exit(args[0] as i32),
+        _ => panic!("Unknown syscall: {}", syscall_id),
+    }
+}
+```
+
+此时，我们将应用程序的发出的系统调用与操作系统提供的系统调用联系起来。
+
+> os 下的 sys_write 与 user 下的 sys_write 实现差不多。
+>
+> *疑问*：use 的 syscall 与 os 的 sbi_call 实现基本一模一样；user 调用了一次 ecall，os 同样也是调用了一次 ecall，这也意味着os 进入 m 模式完成 sys_write 吗？
+>
+> 是的，所有陷入都会进入 m 态，但 m 态可以选择不处理，也可以把它代理给 s 态，让 sbi 处理。
+
+**注意**
+
+```rust
+pub fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
+	...
+    cx // 最后的返回值与传入的参数均为 cx，故寄存器 a0 值不变
+}
+```
+
+根据RISC-V调用规范，a0 既是保存函数第一个参数的寄存器，也是保存函数返回值的寄存器，而 `trap_handler` 的参数为 cx，返回值同样也是cx（请查看函数），故 `call trap_handler` 前后，寄存器 a0 的值不变。
+
+>你可能会有疑惑：
+>
+>```rust
+>cx.x[10] = syscall(cx.x[17], [cx.x[10], cx.x[11], cx.x[12]]) as usize;
+>```
+>
+>这里cx.x[10] 不就是寄存器 a0 吗？为什么说 trap_handler 之后寄存器 a0 的值不变？
+>
+>其实，在修改 cx.x[10] 时，a0 确实被修改为 syscall 的返回值，保存在用户的上下文的寄存器 x10(a0) 中；但是最后返回时，寄存器 a0 再次被修改回 cx 的地址，即最后的返回值与传入的参数均为 cx，故寄存器 a0 值不变。
+
+当从`trap_handler` 返回之后，使用 `__restore` 从保存在内核栈上的 Trap 上下文恢复寄存器。
+
+
+
+### 恢复进程上下文
+
+再简单梳理一下，应用进程发起系统调用：
+
+发起系统调用 syscall -> 执行 ecall 指令 -> 陷入trap，并通过 stvec 寄存器找到中断处理程序 __alltraps -> 保存进程上下文后，调用 trap_handler 函数 -> 执行相应的系统调用
+
+那么，让我们来看看这个 `__restore` 函数是如何实现的。
+
+```assembly
+__restore:
+    # case1: start running app by __restore
+    # case2: back to U after handling trap
+    mv sp, a0 # 传入参数a0: 内核栈中保存的用户上下文
+
+    # 从内核栈顶的 Trap 上下文恢复通用寄存器和 CSR 
+    # restore sstatus/sepc
+    ld t0, 32*8(sp)  # sstatus
+    ld t1, 33*8(sp)  # sepc
+    ld t2, 2*8(sp)   # sscratch; x2(sp) 指向 USER_STACK 栈顶
+    csrw sstatus, t0
+    csrw sepc, t1
+    csrw sscratch, t2
+    # restore general-purpuse registers except sp/tp
+    ld x1, 1*8(sp)
+    ld x3, 3*8(sp)
+    .set n, 5
+    .rept 27
+        LOAD_GP %n
+        .set n, n+1
+    .endr
+
+    # 在内核栈上回收 Trap 上下文所占用的内存
+    addi sp, sp, 34*8
+
+    # 交换 sscratch 和 sp
+    csrrw sp, sscratch, sp
+
+    # 回到 U 模式
+    sret
+```
+
+你可能好奇，这里 `__restore` 为什么给出了两个 case，我们这里先讨论 case 2，也就是返回用户态的情况，case 1 我们将在下一章见到。
+
+- 先说明一下 `__restore` 函数的声明： `fn __restore(cx_addr: usize);` 
+
+  该函数的参数 cx_addr 由 a0 寄存器保存，在 `call trap_handler` 之后，执行 `__restore` 之前，寄存器a0保存的值不变，均为 KERNEL_STACK 中用户上下文的地址。
+
+  <img src="./pic\__restore_5.png" alt="__restore_5" style="zoom:50%;" />
+
+- `mv sp, a0`：将 a0 的值给 寄存器 sp，使sp 指向 KERNERL_STACK 中，用户上下文的底部
+
+  <img src="./pic\__restore_6.png" alt="__restore_6" style="zoom:50%;" />
+
+- `ld t2, 2*8(sp)`：x2(sp) 指向 USER_STACK 栈
+
+  `csrw sscratch, t2`：将用户上下文 x[2] 保存的值赋值给 sscrach
+
+  <img src="./pic\__restore_7.png" alt="__restore_7" style="zoom:50%;" />
+
+- 从内核栈的上下文中，恢复相关寄存器的值。
+
+- `addi sp, sp, 34*8`：内核栈上回收 Trap 上下文所占用的内存，回归进入 Trap 之前的内核栈栈顶。
+
+  <img src="./pic\__restore_8.png" alt="__restore_8" style="zoom:50%;" />
+
+- `csrrw sp, sscratch, sp`：再次交换 sscratch 和 sp，现在 sp 重新指向USER_STACK中，
+  sscratch 也依然保存进入 Trap 之前的状态，并指向内核栈栈顶。
+
+  <img src=".\pic\__restore_9.png" alt="__restore_9" style="zoom:50%;" />
+
+- `sret`：在应用程序控制流状态被还原之后，使用 sret 指令回到 U 特权级继续运行应用程序控制流。
+
+当我们回到用户态时，由于在进行特权级切换的系统调用之前，也就是在 `trap_handler` 中执行了 `cx.sepc += 4;` 也就是将内核栈中保存的用户上下文的 sepc 寄存器的值修改为下一条指令。
+
+> *疑问*：为什么是 +4 而不是 +8 ？我们实现的不是 64 位 os 吗？
+>
+> 查看 risc-v 实际是有 32 位 与 64 位 的 ecall 指令的：
+>
+> <img src="./pic/ecall.png" alt="ecall" style="zoom:50%;" />
+>
+> 这里需要区分一下：riscv 指令长度只有 2 种，压缩的 16 位，不压缩的 32 位，与地址宽度无关；risc-v 64 是指地址宽度 64 位，寄存器宽度 64 位，但指令还是 32 位
+
+也就是说，我们成功完成打印的功能，再次回到用户态，执行 `println!` 或者 `print!` 的下一条语句。
+
+
+
+## 小结
+
+最后，我们对应用程序应用程序调用 `println!` 或者 `print!` 宏做一个小结：
+
+1. 当应用程序调用 `println!` 或者 `print!` 宏时，会去调用 `sys_write`，接着会去调用 `syscall`；
+2. 接着 syscall 会去执行 ecall 指令，从用户态陷入到内核态。进入 S 特权级的 Trap 处理之前，必须保存原控制流的寄存器状态，这一般通过内核栈来保存；
+
+
+
+<img src="./pic\privilege_switching.png" alt="privilege_switching" style="zoom:40%;" />
+
+
+
+3. 通过 `__alltraps` 将 Trap 上下文保存在内核栈上；
+4. 跳转到使用 Rust 编写的 `trap_handler` 函数完成 Trap 分发及处理；
+5. 当 `trap_handler` 返回之后，使用 `__restore` 从保存在内核栈上的 Trap 上下文恢复寄存器；
+6. 最后通过一条 sret 指令返回到应用程序继续执行；

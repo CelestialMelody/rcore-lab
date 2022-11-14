@@ -1,5 +1,39 @@
 ### 应用程序执行环境
 
+```
+├── bootloader(内核依赖的运行在 M 特权级的 SBI 实现，本项目中我们使用 RustSBI)
+│   └── rustsbi-qemu.bin(可运行在 qemu 虚拟机上的预编译二进制版本)
+└── os(我们的内核实现放在 os 目录下)
+    ├── Cargo.toml(内核实现的一些配置文件)
+    ├── Makefile (构建文件)
+    └── src(所有内核的源代码放在 os/src 目录下)
+        ├── console.rs(将打印字符的 SBI 接口进一步封装实现更加强大的格式化输出)
+        ├── entry.asm(设置内核执行环境的的一段汇编代码)
+        ├── lang_items.rs(需要我们提供给 Rust 编译器的一些语义项，目前包含内核 panic 时的处理逻辑)
+        ├── linker.ld(控制内核内存布局的链接脚本以使内核运行在 qemu 虚拟机上)
+        ├── main.rs(内核主函数)
+        └── sbi.rs(调用底层 SBI 实现提供的 SBI 接口)
+```
+
+
+
+```
+├── bootloader(内核依赖的运行在 M 特权级的 SBI 实现，本项目中我们使用 RustSBI)
+│   └── rustsbi-qemu.bin(可运行在 qemu 虚拟机上的预编译二进制版本)
+└── os(我们的内核实现放在 os 目录下)
+    ├── Cargo.toml(内核实现的一些配置文件)
+    ├── Makefile (构建文件)
+    └── src(所有内核的源代码放在 os/src 目录下)
+        ├── console.rs(将打印字符的 SBI 接口进一步封装实现更加强大的格式化输出)
+        ├── entry.asm(设置内核执行环境的的一段汇编代码)
+        ├── lang_items.rs(需要我们提供给 Rust 编译器的一些语义项，目前包含内核 panic 时的处理逻辑)
+        ├── linker.ld(控制内核内存布局的链接脚本以使内核运行在 qemu 虚拟机上)
+        ├── main.rs(内核主函数)
+        └── sbi.rs(调用底层 SBI 实现提供的 SBI 接口)
+```
+
+
+
 ![app-software-stack.png](./pic/app-software-stack.png)
 
 
@@ -33,8 +67,6 @@
 > 1. [RV64GC](http://rcore-os.cn/rCore-Tutorial-Book-v3/chapter1/2remove-std.html#id2:~:text=%E5%AE%83%E8%83%BD%E5%9C%A8-,RV64GC,-%EF%BC%88%E5%8D%B3%E5%AE%9E%E7%8E%B0%E4%BA%86)
 > 2. [库操作系统（Library OS，LibOS）](http://rcore-os.cn/rCore-Tutorial-Book-v3/chapter1/2remove-std.html#id2:~:text=%E5%BA%93%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F%EF%BC%88Library%20OS%EF%BC%8CLibOS%EF%BC%89)
 
-
-
 #### 移除 println! 宏
 
 println! 宏所在的 Rust 标准库 std 需要通过系统调用获得操作系统的服务，而如果要构建运行在裸机上的操作系统，就不能再依赖标准库了
@@ -67,8 +99,6 @@ println! 宏所在的 Rust 标准库 std 需要通过系统调用获得操作系
 [Qemu 启动流程](http://rcore-os.cn/rCore-Tutorial-Book-v3/chapter1/3first-instruction-in-kernel1.html#:~:text=%E8%BF%9B%E8%A1%8C%E6%B7%B1%E5%85%A5%E8%AE%A8%E8%AE%BA%E3%80%82-,Qemu%20%E5%90%AF%E5%8A%A8%E6%B5%81%E7%A8%8B,-%23)
 
 [真实计算机的加电启动流程](http://rcore-os.cn/rCore-Tutorial-Book-v3/chapter1/3first-instruction-in-kernel1.html#:~:text=%E6%B3%A8%E8%A7%A3-,%E7%9C%9F%E5%AE%9E%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%9A%84%E5%8A%A0%E7%94%B5%E5%90%AF%E5%8A%A8%E6%B5%81%E7%A8%8B,-%E7%9C%9F%E5%AE%9E%E8%AE%A1%E7%AE%97%E6%9C%BA)
-
-
 
 #### 程序内存布局与编译流程
 
@@ -137,32 +167,10 @@ println! 宏所在的 Rust 标准库 std 需要通过系统调用获得操作系
 
 ### 为内核支持函数调用
 
-- 如何使得函数返回时能够跳转到调用该函数的下一条指令，即使该函数在代码中的多个位置被调用？ [链接](http://rcore-os.cn/rCore-Tutorial-Book-v3/chapter1/5support-func-call.html#:~:text=%E5%AF%B9%E6%AD%A4%EF%BC%8C%E6%8C%87%E4%BB%A4%E9%9B%86%E5%BF%85%E9%A1%BB%E7%BB%99%E7%94%A8%E4%BA%8E%E5%87%BD%E6%95%B0%E8%B0%83%E7%94%A8%E7%9A%84%E8%B7%B3%E8%BD%AC%E6%8C%87%E4%BB%A4%E4%B8%80%E4%BA%9B%E9%A2%9D%E5%A4%96%E7%9A%84%E8%83%BD%E5%8A%9B%EF%BC%8C%E8%80%8C%E4%B8%8D%E5%8F%AA%E6%98%AF%E5%8D%95%E7%BA%AF%E7%9A%84%E8%B7%B3%E8%BD%AC)
-
-  > 利用jarl ret 指令实现函数调用
-  >
-  > 使用栈保存上下文信息，sp, fp（均为[被调用者保存寄存器](http://rcore-os.cn/rCore-Tutorial-Book-v3/chapter1/5support-func-call.html#:~:text=%E8%A2%AB%E8%B0%83%E7%94%A8%E8%80%85%E4%BF%9D%E5%AD%98(Callee%2DSaved)%20%E5%AF%84%E5%AD%98%E5%99%A8)）记录栈的地址范围
-  >
-  > 栈上多个 `fp` 信息实际上保存了一条完整的函数调用链，通过适当的方式我们可以实现对函数调用关系的跟踪
-  >
-
-- 对于一个函数而言，保证它调用某个子函数之前，以及该子函数返回到它之后（某些）通用寄存器的值保持不变有何意义？ [链接](http://rcore-os.cn/rCore-Tutorial-Book-v3/chapter1/5support-func-call.html#:~:text=%E5%A6%82%E6%9E%9C%E6%88%91%E4%BB%AC%E8%AF%95%E5%9B%BE,%E6%B0%B8%E4%B9%85%E4%B8%A2%E5%A4%B1%20%E3%80%82)
-
-  > 保证被调用函数返回时调用者函数能正确执行
-
+- 如何使得函数返回时能够跳转到调用该函数的下一条指令，即使该函数在代码中的多个位置被调用？
+- 对于一个函数而言，保证它调用某个子函数之前，以及该子函数返回到它之后（某些）通用寄存器的值保持不变有何意义？
 - 调用者函数和被调用者函数如何合作保证调用子函数前后寄存器内容保持不变？调用者保存和被调用者保存寄存器的保存与恢复各自由谁负责？它们暂时被保存在什么位置？它们于何时被保存和恢复（如函数的开场白/退场白）？
-
-  > 使用栈保存[函数调用上下文](http://rcore-os.cn/rCore-Tutorial-Book-v3/chapter1/5support-func-call.html#:~:text=%E5%9C%A8%E6%8E%A7%E5%88%B6%E6%B5%81%E8%BD%AC%E7%A7%BB%E5%89%8D%E5%90%8E%E9%9C%80%E8%A6%81%E4%BF%9D%E6%8C%81%E4%B8%8D%E5%8F%98%E7%9A%84%E5%AF%84%E5%AD%98%E5%99%A8%E9%9B%86%E5%90%88%E7%A7%B0%E4%B9%8B%E4%B8%BA%20%E5%87%BD%E6%95%B0%E8%B0%83%E7%94%A8%E4%B8%8A%E4%B8%8B%E6%96%87)信息，sp, fp（均为被调用者保存寄存器）记录栈的地址范围
-  >
-  > [保存与恢复](http://rcore-os.cn/rCore-Tutorial-Book-v3/chapter1/5support-func-call.html#:~:text=%E5%8F%91%E7%8E%B0%E6%97%A0%E8%AE%BA%E6%98%AF%E8%B0%83%E7%94%A8%E5%87%BD%E6%95%B0%E8%BF%98%E6%98%AF%E8%A2%AB%E8%B0%83%E7%94%A8%E5%87%BD%E6%95%B0%EF%BC%8C%E9%83%BD%E4%BC%9A%E5%9B%A0%E8%B0%83%E7%94%A8%E8%A1%8C%E4%B8%BA%E8%80%8C%E9%9C%80%E8%A6%81%E4%B8%A4%E6%AE%B5%E5%8C%B9%E9%85%8D%E7%9A%84%E4%BF%9D%E5%AD%98%E5%92%8C%E6%81%A2%E5%A4%8D%E5%AF%84%E5%AD%98%E5%99%A8%E7%9A%84%E6%B1%87%E7%BC%96%E4%BB%A3%E7%A0%81%EF%BC%8C%E5%8F%AF%E4%BB%A5%E5%88%86%E5%88%AB%E5%B0%86%E5%85%B6%E7%A7%B0%E4%B8%BA%20%E5%BC%80%E5%9C%BA%20(Prologue)%20%E5%92%8C%20%E7%BB%93%E5%B0%BE%20(Epilogue)%EF%BC%8C%E5%AE%83%E4%BB%AC%E4%BC%9A%E7%94%B1%E7%BC%96%E8%AF%91%E5%99%A8%E5%B8%AE%E6%88%91%E4%BB%AC%E8%87%AA%E5%8A%A8%E6%8F%92%E5%85%A5%EF%BC%8C%E6%9D%A5%E5%AE%8C%E6%88%90%E7%9B%B8%E5%85%B3%E5%AF%84%E5%AD%98%E5%99%A8%E7%9A%84%E4%BF%9D%E5%AD%98%E4%B8%8E%E6%81%A2%E5%A4%8D) 
-
 - 在 RISC-V 架构上，调用者保存和被调用者保存寄存器如何划分（特别地，思考 sp 和 ra 是调用者还是被调用者保存寄存器？为什么？）？如何使用寄存器传递函数调用的参数和返回值？
-
-  > sp 被调用者保持寄存器，指向内存中栈顶地址；函数中的结尾代码负责将开场代码分配的栈帧回收，仅仅需要将 `sp` 的值增加相同的字节数回到分配之前的状态
-  >
-  > ra 调用者保存寄存器，在函数的开头和结尾保存/恢复
-  >
-  > 寄存器调用规范
 
 
 
@@ -176,17 +184,17 @@ println! 宏所在的 Rust 标准库 std 需要通过系统调用获得操作系
 -  函数调用 (Function Call)
 - 其他控制流都只需要跳转到一个 编译期固定下来 的地址，而函数调用的返回跳转是跳转到一个 运行时确定 （确切地说是在函数调用发生的时候）的地址。
 
-![function-call.png](pic/function-call.png)
+![function-call.png](./pic/function-call.png)
 
-[函数调用上下文](http://rcore-os.cn/rCore-Tutorial-Book-v3/chapter1/5support-func-call.html#:~:text=%EF%BC%8C%E5%9C%A8%E6%8E%A7%E5%88%B6%E6%B5%81%E8%BD%AC%E7%A7%BB%E5%89%8D%E5%90%8E%E9%9C%80%E8%A6%81%E4%BF%9D%E6%8C%81%E4%B8%8D%E5%8F%98%E7%9A%84%E5%AF%84%E5%AD%98%E5%99%A8%E9%9B%86%E5%90%88%E7%A7%B0%E4%B9%8B%E4%B8%BA%20%E5%87%BD%E6%95%B0%E8%B0%83%E7%94%A8%E4%B8%8A%E4%B8%8B%E6%96%87)
+
 
 [栈帧 stack frame](http://rcore-os.cn/rCore-Tutorial-Book-v3/chapter1/5support-func-call.html#:~:text=%E6%B3%A8%E8%A7%A3-,%E6%A0%88%E5%B8%A7%20stack%20frame,-%E6%88%91%E4%BB%AC%E7%9F%A5%E9%81%93%E7%A8%8B%E5%BA%8F)
 
-<img src="pic/CallStack.png" alt="CallStack.png" style="zoom: 25%;" />
+<img src="./pic/CallStack.png" alt="CallStack.png" style="zoom: 25%;" />
 
 一般而言，当前执行函数的栈帧的两个边界分别由栈指针 (Stack Pointer)寄存器和栈帧指针（frame pointer）寄存器来限定
 
-<img src="pic/StackFrame.png" alt="StackFrame.png" style="zoom:25%;" />
+<img src="./pic/StackFrame.png" alt="StackFrame.png" style="zoom:25%;" />
 
 它的开头和结尾分别在 sp(x2) 和 fp(s0) 所指向的地址。按照地址从高到低分别有以下内容，它们都是通过 `sp` 加上一个偏移量来访问的：
 
@@ -197,16 +205,13 @@ println! 宏所在的 Rust 标准库 std 需要通过系统调用获得操作系
 
 因此，栈上多个 `fp` 信息实际上保存了一条完整的函数调用链，通过适当的方式我们可以实现对函数调用关系的跟踪。
 
-
-
 #### 分配并使用启动栈
 
 为了将控制权转交给我们使用 Rust 语言编写的内核入口，需要手写若干行汇编代码，这些汇编代码放在 `entry.asm` 中并在控制权被转交给内核后最先被执行，但它们的功能会更加复杂：首先设置栈来在内核内使能函数调用，随后直接调用使用 Rust 编写的内核入口点，从而控制权便被移交给 Rust 代码
 
-
 - 在 `entry.asm` 中[分配启动栈空间](http://rcore-os.cn/rCore-Tutorial-Book-v3/chapter1/5support-func-call.html#:~:text=entry.asm%20%E4%B8%AD-,%E5%88%86%E9%85%8D%E5%90%AF%E5%8A%A8%E6%A0%88%E7%A9%BA%E9%97%B4,-%EF%BC%8C%E5%B9%B6%E5%9C%A8%E6%8E%A7%E5%88%B6)，并在控制权被转交给 Rust 入口之前将栈指针 `sp` 设置为栈顶的位置
 
-- 通过伪指令 `call` 调用 Rust 编写的内核入口点 `rust_main` 将[控制权转交]()给 Rust 代码，该入口点在 `main.rs` 中实现
+- 通过伪指令 `call` 调用 Rust 编写的![image-20221009150238044](/home/clstilmldy/note/OS/rCore/pic/image-20221009150238044.png)内核入口点 `rust_main` 将[控制权转交]()给 Rust 代码，该入口点在 `main.rs` 中实现
 - 完成对 `.bss` 段的[清零](http://rcore-os.cn/rCore-Tutorial-Book-v3/chapter1/5support-func-call.html#:~:text=%E6%88%91%E4%BB%AC%E9%A1%BA%E4%BE%BF-,%E5%AE%8C%E6%88%90%E5%AF%B9%20.bss%20%E6%AE%B5%E7%9A%84%E6%B8%85%E9%9B%B6,-%E3%80%82%E8%BF%99%E6%98%AF%E5%86%85)
 
 
