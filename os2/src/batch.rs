@@ -122,7 +122,7 @@ lazy_static! {
                 // 找到 link_app.S 中提供的符号 _num_apps，并从这里开始解析出应用数量以及各个应用的起始地址
                 fn _num_apps();
             }
-            let num_app_ptr = _num_apps as usize as *const usize;
+            let num_app_ptr = _num_apps as usize as *const usize; // 应用数量记录应用数量的指针/地址
             // volatile: 直接存取原始内存地址，可以防止编译器对代码优化;
             // see [read_volatile](https://doc.rust-lang.org/std/ptr/fn.read_volatile.html)
             // or [c/cpp volatile](https://www.runoob.com/w3cnote/c-volatile-keyword.html)
@@ -131,7 +131,7 @@ lazy_static! {
             // app_start_raw
             // slice::from_raw_parts 根据指针和长度形成切片
             let app_start_raw: &[usize] = core::slice::from_raw_parts(
-                // why add? -> see build.rs
+                // why add? -> see build.rs: add 1 get the first app start location
                 num_app_ptr.add(1), num_apps + 1
             );
             //  slice::copy_from_slice: 使用 memcpy 将所有元素从 src 复制到 self
