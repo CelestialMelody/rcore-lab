@@ -59,7 +59,7 @@ fn rust_main() -> ! {
     }
     clear_bss();
     logging::init();
-    println!("[kernel] Hello, World");
+    println!("[kernel] Hello, world");
     println!("[kernel] Hello, rCore");
 
     trace!(

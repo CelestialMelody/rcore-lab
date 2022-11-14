@@ -42,8 +42,8 @@ fn rust_main() -> ! {
     }
     clear_bss();
     logging::init();
-    println!("Hello, World");
-    println!("Hello, rCore");
+    println!("Hello, world!");
+    println!("Hello, rCore!");
 
     trace!(".text [{:#x}, {:#x})", stext as usize, etext as usize);
     debug!(".rodata [{:#x}, {:#x})", srodata as usize, erodata as usize);

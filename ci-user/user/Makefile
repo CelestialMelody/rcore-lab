@@ -13,9 +13,10 @@ TEST ?= $(CHAPTER)
 
 ifeq ($(TEST), 0) # No test, deprecated, previously used in v3
 	APPS :=  $(filter-out $(wildcard $(APP_DIR)/ch*.rs), $(wildcard $(APP_DIR)/*.rs))
-else ifeq ($(TEST), 1) # All test
-	APPS :=  $(wildcard $(APP_DIR)/ch*.rs)
-else
+# else ifeq ($(TEST), 1) # All test
+# 	APPS :=  $(wildcard $(APP_DIR)/ch*.rs)
+# else
+else ifneq ($(TEST), 1) # Test for a specific chapter
 	TESTS := $(shell seq $(BASE) $(TEST))
 	ifeq ($(BASE), 0) # Normal tests only
 		APPS := $(foreach T, $(TESTS), $(wildcard $(APP_DIR)/ch$(T)_*.rs))

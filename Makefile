@@ -18,8 +18,8 @@ lab5: test8
 setup:
 	rm -rf  ${DIR}
 	mkdir ${DIR}
-	cp -r easy-fs ${DIR}
-	cp -r easy-fs-fuse ${DIR}
+#	cp -r easy-fs ${DIR}
+#	cp -r easy-fs-fuse ${DIR}
 	cp -r ci-user ${DIR}
 	cp -r bootloader ${DIR}
 #	cp -r reports ${DIR}
