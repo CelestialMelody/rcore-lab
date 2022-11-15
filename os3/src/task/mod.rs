@@ -4,9 +4,10 @@ mod switch;
 #[allow(clippy::module_inception)] // 允许有与其父模块同名的子模块
 mod task;
 
-use crate::config::MAX_APP_NUM;
+use crate::config::{MAX_APP_NUM, MAX_SYSCALL_NUM};
 use crate::loader::{get_num_apps, init_app_cx};
 use crate::sync::UnSafeCell;
+use crate::timer::get_time_micro;
 
 use lazy_static::*;
 
@@ -18,14 +19,14 @@ pub struct TaskManager {
     /// number of tasks
     num_apps: usize,
     /// use inner value to get mutbale reference
-    inner: UnSafeCell<TaskManagerInner>,
+    pub inner: UnSafeCell<TaskManagerInner>,
 }
 
-struct TaskManagerInner {
+pub struct TaskManagerInner {
     /// 任务控制块数组
-    tasks: [TaskControlBlock; MAX_APP_NUM],
+    pub tasks: [TaskControlBlock; MAX_APP_NUM],
     /// 用于记录当前正在运行的任务id
-    current_task: usize,
+    pub current_task: usize,
 }
 
 lazy_static! {
@@ -35,6 +36,12 @@ lazy_static! {
         let mut tasks = [TaskControlBlock{
             task_cx: TaskContext::init(),
             task_status: TaskStatus::UnInit,
+
+            // lab1
+            syscall_times: [0; MAX_SYSCALL_NUM],
+            first_run: true,
+            begin_time: 0,
+            end_time: 0,
         }; MAX_APP_NUM];
 
         // we can see that every task has its own stack
@@ -72,6 +79,11 @@ impl TaskManager {
 
         let next_task_cx_ptr = &task_zero.task_cx as *const TaskContext;
 
+        // lab1
+        // change task_zero before drop inner
+        task_zero.begin_time = get_time_micro();
+        task_zero.first_run = false;
+
         drop(inner); // 释放 exclusive_access() 的锁
 
         // run the first task
@@ -100,6 +112,10 @@ impl TaskManager {
         let mut inner = self.inner.exclusive_access();
         let curr_task_id = inner.current_task;
         inner.tasks[curr_task_id].task_status = TaskStatus::Exited;
+
+        // lab1
+        // acturally, we no need to do this
+        inner.tasks[curr_task_id].end_time = get_time_micro();
     }
 
     /// find the next task to run and return its id
@@ -131,6 +147,12 @@ impl TaskManager {
 
             inner.current_task = next_task_id;
 
+            // lab1
+            if inner.tasks[next_task_id].first_run {
+                inner.tasks[next_task_id].begin_time = get_time_micro();
+                inner.tasks[next_task_id].first_run = false;
+            }
+
             // 因为一般情况下它是在函数退出之后才会被自动释放，从而 TASK_MANAGER 的 inner 字段得以回归到未被借用的状态，之后可以再借用。
             // 如果不手动 drop 的话，编译器会在 __switch 返回时，也就是当前应用被切换回来的时候才 drop，这期间我们都不能修改 TaskManagerInner ，
             // 甚至不能读（因为之前是可变借用），会导致内核 panic 报错退出。
@@ -142,6 +164,43 @@ impl TaskManager {
             }
         } else {
             panic!("no task to run");
+        }
+    }
+}
+
+// lab1
+impl TaskManager {
+    // acturally, we no need to do this, it must be Running
+    fn get_curr_task_status(&self) -> TaskStatus {
+        let inner = self.inner.exclusive_access();
+        let curr_task_id = inner.current_task;
+        inner.tasks[curr_task_id].task_status
+    }
+
+    fn get_curr_task_syscall_times(&self) -> [u32; MAX_SYSCALL_NUM] {
+        let inner = self.inner.exclusive_access();
+        let task_id = inner.current_task;
+        inner.tasks[task_id].syscall_times
+    }
+
+    fn record_curr_task_syscall_times(&self, syscall_id: usize) {
+        let mut inner = self.inner.exclusive_access();
+        let task_id = inner.current_task;
+        inner.tasks[task_id].syscall_times[syscall_id] += 1;
+    }
+
+    fn get_curr_task_running_time(&self) -> usize {
+        let inner = self.inner.exclusive_access();
+        let task_id = inner.current_task;
+        let begin_time = inner.tasks[task_id].begin_time;
+
+        match inner.tasks[task_id].task_status {
+            // acturally, we no need to do this, it must be Running
+            TaskStatus::Exited => {
+                let end_time = inner.tasks[task_id].end_time;
+                end_time - begin_time
+            }
+            _ => get_time_micro() - begin_time,
         }
     }
 }
@@ -173,4 +232,25 @@ pub fn suspend_current_and_run_next() {
 pub fn exit_current_and_run_next() {
     mark_current_exited();
     run_next_task();
+}
+
+// pub fn get_task_status(task_id: usize) -> TaskStatus {
+//     TASK_MANAGER.get_task_status(task_id)
+// }
+
+// lab1
+pub fn get_curr_task_status() -> TaskStatus {
+    TASK_MANAGER.get_curr_task_status()
+}
+
+pub fn get_curr_task_syscall_times() -> [u32; MAX_SYSCALL_NUM] {
+    TASK_MANAGER.get_curr_task_syscall_times()
+}
+
+pub fn record_curr_task_syscall_times(syscall_id: usize) {
+    TASK_MANAGER.record_curr_task_syscall_times(syscall_id)
+}
+
+pub fn get_curr_task_running_time() -> usize {
+    TASK_MANAGER.get_curr_task_running_time()
 }

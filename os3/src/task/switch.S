@@ -44,6 +44,7 @@ __switch:
     # part [3] 
     # a1 = next_task_cx_ptr
     # restore ra & s0~s11 of next execution
+    # for first app, 0(a1) is __restore, so ra = __restore; after __switch, ret to __restore
     ld ra, 0(a1)
     .set n, 0
     .rept 12

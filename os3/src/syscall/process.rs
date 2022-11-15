@@ -1,5 +1,8 @@
 use crate::config::MAX_SYSCALL_NUM;
-use crate::task::{exit_current_and_run_next, suspend_current_and_run_next, TaskStatus};
+use crate::task::{
+    exit_current_and_run_next, get_curr_task_running_time, get_curr_task_status,
+    get_curr_task_syscall_times, suspend_current_and_run_next, TaskStatus,
+};
 use crate::timer::get_time_micro;
 
 #[repr(C)]
@@ -13,7 +16,7 @@ pub struct TimeVal {
 pub struct TaskInfo {
     status: TaskStatus,
     syscall_times: [u32; MAX_SYSCALL_NUM],
-    time: usize,
+    time: usize, // milliseconds
 }
 
 /// 打印退出的应用程序的返回值并同样调用 run_next_app 切换到下一个应用程序。
@@ -46,7 +49,11 @@ pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
 }
 
 /// 获取当前任务的信息
-pub fn sys_task_info(_task_info: *mut TaskInfo) -> isize {
-    // TODO
-    -1
+pub fn sys_task_info(task_info: *mut TaskInfo) -> isize {
+    unsafe {
+        (*task_info).status = get_curr_task_status();
+        (*task_info).syscall_times = get_curr_task_syscall_times();
+        (*task_info).time = get_curr_task_running_time() / 1000;
+    }
+    0
 }

@@ -44,4 +44,8 @@ impl<T> UnSafeCell<T> {
         // `<'_, T>`
         self.inner.borrow_mut()
     }
+
+    // pub fn get_ref(&self) -> Ref<'_, T> {
+    //     self.inner.borrow()
+    // }
 }
