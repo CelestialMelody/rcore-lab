@@ -4,8 +4,10 @@ pub const SYSCALL_WRITE: usize = 64;
 pub const SYSCALL_EXIT: usize = 93;
 pub const SYSCALL_YIELD: usize = 124;
 pub const SYSCALL_GET_TIME: usize = 169;
+pub const SYSCALL_TASK_INFO: usize = 410;
 
 use super::TimeVal;
+use crate::TaskInfo;
 
 /// 所有的系统调用都封装成 syscall 函数，支持传入 syscall ID 和 3 个参数
 pub fn syscall(id: usize, args: [usize; 3]) -> isize {
@@ -64,4 +66,8 @@ pub fn sys_yield() -> isize {
 
 pub fn sys_get_time(time: &TimeVal, tz: usize) -> isize {
     syscall(SYSCALL_GET_TIME, [time as *const _ as usize, tz, 0])
+}
+
+pub fn sys_task_info(info: &TaskInfo) -> isize {
+    syscall(SYSCALL_TASK_INFO, [info as *const _ as usize, 0, 0])
 }

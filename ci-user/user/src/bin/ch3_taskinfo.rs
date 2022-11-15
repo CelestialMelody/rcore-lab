@@ -4,7 +4,7 @@
 extern crate user_lib;
 
 use user_lib::{
-    get_time, println, sleep, task_info, TaskInfo, TaskStatus, SYSCALL_EXIT, SYSCALL_GETTIMEOFDAY,
+    get_time, println, sleep, task_info, TaskInfo, TaskStatus, SYSCALL_EXIT, SYSCALL_GET_TIME,
     SYSCALL_TASK_INFO, SYSCALL_WRITE, SYSCALL_YIELD,
 };
 
@@ -18,7 +18,7 @@ pub fn main() -> usize {
     // 注意本次 task info 调用也计入
     assert_eq!(0, task_info(&info));
     let t3 = get_time() as usize;
-    assert!(3 <= info.syscall_times[SYSCALL_GETTIMEOFDAY]);
+    assert!(3 <= info.syscall_times[SYSCALL_GET_TIME]);
     assert_eq!(1, info.syscall_times[SYSCALL_TASK_INFO]);
     assert_eq!(0, info.syscall_times[SYSCALL_WRITE]);
     assert!(0 < info.syscall_times[SYSCALL_YIELD]);
@@ -32,7 +32,7 @@ pub fn main() -> usize {
     let t4 = get_time() as usize;
     assert_eq!(0, task_info(&info));
     let t5 = get_time() as usize;
-    assert!(5 <= info.syscall_times[SYSCALL_GETTIMEOFDAY]);
+    assert!(5 <= info.syscall_times[SYSCALL_GET_TIME]);
     assert_eq!(2, info.syscall_times[SYSCALL_TASK_INFO]);
     assert_eq!(2, info.syscall_times[SYSCALL_WRITE]);
     assert!(0 < info.syscall_times[SYSCALL_YIELD]);

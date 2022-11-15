@@ -10,8 +10,9 @@ mod syscall;
 
 /// `alloc` with `#![no_std]` support, see [`link`](https://doc.rust-lang.org/edition-guide/rust-2018/path-changes.html#an-exception-for-extern-crate)
 // extern crate alloc;
-use syscall::*;
+pub use syscall::*;
 
+const MAX_SYSCALL_NUM: usize = 500;
 #[repr(C)]
 #[derive(Debug, Default)]
 pub struct TimeVal {
@@ -31,6 +32,23 @@ pub enum TaskStatus {
     Ready,
     Running,
     Exited,
+}
+
+#[derive(Debug)]
+pub struct TaskInfo {
+    pub status: TaskStatus,
+    pub syscall_times: [u32; MAX_SYSCALL_NUM],
+    pub time: usize,
+}
+
+impl TaskInfo {
+    pub fn new() -> Self {
+        TaskInfo {
+            status: TaskStatus::UnInit,
+            syscall_times: [0; MAX_SYSCALL_NUM],
+            time: 0,
+        }
+    }
 }
 
 #[alloc_error_handler]
@@ -111,4 +129,8 @@ pub fn get_time() -> isize {
         0 => ((time.sec & 0xffff) * 1000 + time.usec / 1000) as isize, // sec to ms
         _ => -1,
     }
+}
+
+pub fn task_info(info: &TaskInfo) -> isize {
+    sys_task_info(info)
 }
