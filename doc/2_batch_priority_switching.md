@@ -10,18 +10,21 @@
 
 <img src="./pic\print.png" alt="print" style="zoom: 40%;" />
 
+[user/src/lib.rs](https://github.com/chyyuu/os_kernel_lab/blob/ch2-dev/user/src/lib.rs#:~:text=pub%20fn%20write(fd%3A%20usize%2C%20buf%3A%20%26%5Bu8%5D)%20%2D%3E%20isize%20%7B%20sys_write(fd%2C%20buf)%20%7D):
+
 ```rust
-// user/src/lib.rs
 pub fn write(fd: usize, buf: &[u8]) -> isize {
     sys_write(fd, buf)
 }
+```
 
-// user/src/syscall.rs
+[user/src/syscall.rs](https://github.com/chyyuu/os_kernel_lab/blob/ch2-dev/user/src/syscall.rs#:~:text=fn%20syscall(id%3A%20usize%2C%20args%3A%20%5Busize%3B%203%5D)%20%2D%3E%20isize%20%7B):
+
+```rust
 pub fn sys_write(fd: usize, buf: &[u8]) -> isize {
     syscall(SYSCALL_WRITE, [fd, buf.as_ptr() as usize, buf.len()])
 }
 
-// user/src/syscall.rs
 pub fn syscall(id: usize, args: [usize; 3]) -> isize {
     let mut ret: isize;
     unsafe {
@@ -36,6 +39,8 @@ pub fn syscall(id: usize, args: [usize; 3]) -> isize {
     ret
 }
 ```
+
+
 
 > 这里额外补充一点点 risc-v 的知识：
 >
@@ -60,7 +65,7 @@ pub fn syscall(id: usize, args: [usize; 3]) -> isize {
 
 ### 保存进程上下文
 
-接下来让我们详细看看 `__alltraps`
+接下来让我们详细看看 [__alltraps](https://github.com/chyyuu/os_kernel_lab/blob/ch2-dev/os/src/trap/trap.S#:~:text=.align%202-,__alltraps%3A,-csrrw%20sp%2C%20sscratch):
 
 ```assembly
 __alltraps:
@@ -99,7 +104,7 @@ __alltraps:
 
 - 首先在执行 `__alltraps` 之前，寄存器 sp 执行用户栈某处，sscratch 指向 `KERNERL_STACK`栈顶。这里 sscratch 为什么指向的这个位置我们暂且 *按下不表*，我们会在下一章，应用程序切换的分析时，看到为什么是这样的:)
 
-  <img src="./pic/__alltraps_1.png" alt="__alltraps_1" style="zoom:50%;" />
+  <img src="./pic\__alltraps_1.png" alt="__alltraps_1" style="zoom:50%;" />
 
 - `csrrw sp, sscratch, sp`：交换 sscratch 和 sp 的值;
 
@@ -107,15 +112,15 @@ __alltraps:
 
   > 寄存器 sp 指向内核栈并分配了一块空间，这块空间的大小实际就是保存的上下文大小
   >
+  > [os/src/trap/context.rs](https://github.com/chyyuu/os_kernel_lab/blob/ch2-dev/os/src/trap/context.rs#:~:text=%23%5Brepr,%7D)
+  >
   > ```rust
-  > // os/src/trap/context.rs
-  > 
   > # [repr(C)] // C 内存布局
   > // size = 34 * 8 Bytes -> see trap.S
   > pub struct TrapContext {
-  >     pub x: [usize; 32],
-  >     pub sstatus: Sstatus,
-  >     pub sepc: usize,
+  > pub x: [usize; 32],
+  > pub sstatus: Sstatus,
+  > pub sepc: usize,
   > }
   > ```
 
@@ -127,7 +132,7 @@ __alltraps:
 
 - `csrr t2, sscratch` 与 `sd t2, 2*8(sp)`：将 sscratch 的值保存在内核栈上（即cx.x[2]）
 
-  <img src="./pic/__alltraps_3.png" alt="__alltraps_3" style="zoom:50%;" />
+  <img src="./pic\__alltraps_3.png" alt="__alltraps_3" style="zoom:50%;" />
 
   前面提到，此时 sscracth 保存的值为发起系统调用前，寄存器 sp 保存的值。
 
@@ -145,9 +150,9 @@ __alltraps:
 
 我们通过寄存器 a0，将应用程序的上下文传递到 `tarp_handler` 中。
 
-```rust
-// os/src/trap/mod.rs
+[os/src/trap/mod.rs](https://github.com/chyyuu/os_kernel_lab/blob/ch2-dev/os/src/trap/mod.rs#:~:text=%23%5Bno_mangle,mut%20TrapContext%20%7B)
 
+```rust
 pub fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
  Trap::Exception(Exception::UserEnvCall) => {
             // 在 __restore 的时候 sepc 在恢复之后就会指向 ecall 的下一条指令，并在 sret 之后从那里开始执行。
@@ -161,8 +166,9 @@ pub fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
 
 当 `trap_handler` 通过 `scause` 寄存器的值了解到 trap 的原因后会去，根据应用程序上下文寄存器 x17(a7) 的值，执行相应的 syscall 处理函数。
 
+[os/src/syscall/mod.rs](https://github.com/chyyuu/os_kernel_lab/blob/ch2-dev/os/src/syscall/mod.rs#:~:text=pub%20fn%20syscall(syscall_id%3A%20usize%2C%20args%3A%20%5Busize%3B%203%5D)%20%2D%3E%20isize%20%7B)
+
 ```rust
-// os/src/syscall/mod.rs
 pub fn syscall(syscall_id: usize, args: [usize; 3]) -> isize {
     match syscall_id {
         SYSCALL_WRITE => sys_write(args[0], args[1] as *const u8, args[2]),
@@ -211,7 +217,7 @@ pub fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
 
 发起系统调用 syscall -> 执行 ecall 指令 -> 陷入trap，并通过 stvec 寄存器找到中断处理程序 __alltraps -> 保存进程上下文后，调用 trap_handler 函数 -> 执行相应的系统调用
 
-那么，让我们来看看这个 `__restore` 函数是如何实现的。
+那么，让我们来看看这个 [__restore](https://github.com/chyyuu/os_kernel_lab/blob/ch2-dev/os/src/trap/trap.S#:~:text=call%20trap_handler-,__restore%3A,-%23%20case1%3A%20start%20running) 函数是如何实现的。
 
 ```assembly
 __restore:
@@ -273,7 +279,7 @@ __restore:
 - `csrrw sp, sscratch, sp`：再次交换 sscratch 和 sp，现在 sp 重新指向USER_STACK中，
   sscratch 也依然保存进入 Trap 之前的状态，并指向内核栈栈顶。
 
-  <img src=".\pic\__restore_9.png" alt="__restore_9" style="zoom:50%;" />
+  <img src="./pic\__restore_9.png" alt="__restore_9" style="zoom:50%;" />
 
 - `sret`：在应用程序控制流状态被还原之后，使用 sret 指令回到 U 特权级继续运行应用程序控制流。
 
@@ -283,7 +289,7 @@ __restore:
 >
 > 查看 risc-v 实际是有 32 位 与 64 位 的 ecall 指令的：
 >
-> <img src="./pic/ecall.png" alt="ecall" style="zoom:50%;" />
+> <img src="./pic\ecall.png" alt="ecall" style="zoom:50%;" />
 >
 > 这里需要区分一下：riscv 指令长度只有 2 种，压缩的 16 位，不压缩的 32 位，与地址宽度无关；risc-v 64 是指地址宽度 64 位，寄存器宽度 64 位，但指令还是 32 位
 
