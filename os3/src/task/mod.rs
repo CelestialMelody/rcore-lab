@@ -9,6 +9,7 @@ use crate::loader::{get_num_apps, init_app_cx};
 use crate::sync::UnSafeCell;
 use crate::timer::get_time_micro;
 
+use alloc::vec::Vec;
 use lazy_static::*;
 
 pub use context::TaskContext;
@@ -24,7 +25,8 @@ pub struct TaskManager {
 
 pub struct TaskManagerInner {
     /// 任务控制块数组
-    pub tasks: [TaskControlBlock; MAX_APP_NUM],
+    // pub tasks: [TaskControlBlock; MAX_APP_NUM],
+    pub tasks: Vec<TaskControlBlock>,
     /// 用于记录当前正在运行的任务id
     pub current_task: usize,
 }
@@ -33,16 +35,11 @@ lazy_static! {
     pub static ref TASK_MANAGER: TaskManager = {
         let num_apps = get_num_apps();
 
-        let mut tasks = [TaskControlBlock{
-            task_cx: TaskContext::init(),
-            task_status: TaskStatus::UnInit,
-
-            // lab1
-            syscall_times: [0; MAX_SYSCALL_NUM],
-            first_run: true,
-            begin_time: 0,
-            end_time: 0,
-        }; MAX_APP_NUM];
+        // let mut tasks = [TaskControlBlock::new(); MAX_APP_NUM];
+        let mut tasks: Vec<TaskControlBlock> = Vec::with_capacity(MAX_APP_NUM);
+        for _ in 0..MAX_APP_NUM {
+            tasks.push(TaskControlBlock::new());
+        }
 
         // we can see that every task has its own stack
         for (i, t) in tasks.iter_mut().enumerate().take(num_apps) { // take(num_apps) 保证只初始化 num_apps 个任务; iterater::take() 用于限制迭代器的长度
