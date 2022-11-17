@@ -2,7 +2,7 @@ use crate::config::MAX_SYSCALL_NUM;
 
 use super::TaskContext;
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct TaskControlBlock {
     pub task_status: TaskStatus,
     pub task_cx: TaskContext,
