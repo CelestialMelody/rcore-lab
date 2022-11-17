@@ -1,4 +1,4 @@
-use core::cell::{RefCell, RefMut};
+use core::cell::{Ref, RefCell, RefMut};
 
 /// Wrap a static data structure inside it so that we are
 /// able to access it without any `unsafe`.
@@ -45,7 +45,7 @@ impl<T> UnSafeCell<T> {
         self.inner.borrow_mut()
     }
 
-    // pub fn get_ref(&self) -> Ref<'_, T> {
-    //     self.inner.borrow()
-    // }
+    pub fn get_ref(&self) -> Ref<'_, T> {
+        self.inner.borrow()
+    }
 }

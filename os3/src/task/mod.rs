@@ -169,13 +169,13 @@ impl TaskManager {
 impl TaskManager {
     // acturally, we no need to do this, it must be Running
     fn get_curr_task_status(&self) -> TaskStatus {
-        let inner = self.inner.exclusive_access();
+        let inner = self.inner.get_ref();
         let curr_task_id = inner.current_task;
         inner.tasks[curr_task_id].task_status
     }
 
     fn get_curr_task_syscall_times(&self) -> [u32; MAX_SYSCALL_NUM] {
-        let inner = self.inner.exclusive_access();
+        let inner = self.inner.get_ref();
         let task_id = inner.current_task;
         inner.tasks[task_id].syscall_times
     }
@@ -187,7 +187,7 @@ impl TaskManager {
     }
 
     fn get_curr_task_running_time(&self) -> usize {
-        let inner = self.inner.exclusive_access();
+        let inner = self.inner.get_ref();
         let task_id = inner.current_task;
         let begin_time = inner.tasks[task_id].begin_time;
 
