@@ -43,6 +43,8 @@ lazy_static! {
 
         // we can see that every task has its own stack
         for (i, t) in tasks.iter_mut().enumerate().take(num_apps) { // take(num_apps) 保证只初始化 num_apps 个任务; iterater::take() 用于限制迭代器的长度
+            t.syscall_times = alloc::vec![0; MAX_SYSCALL_NUM];
+
             t.task_cx = TaskContext::goto_restore(init_app_cx(i)); // 初始化任务上下文
             t.task_status = TaskStatus::Ready;
         }
@@ -169,15 +171,45 @@ impl TaskManager {
 impl TaskManager {
     // acturally, we no need to do this, it must be Running
     fn get_curr_task_status(&self) -> TaskStatus {
-        let inner = self.inner.exclusive_access();
+        let inner = self.inner.get_ref();
         let curr_task_id = inner.current_task;
         inner.tasks[curr_task_id].task_status
     }
 
     fn get_curr_task_syscall_times(&self) -> [u32; MAX_SYSCALL_NUM] {
-        let inner = self.inner.exclusive_access();
+        let inner = self.inner.get_ref();
         let task_id = inner.current_task;
-        inner.tasks[task_id].syscall_times
+
+        // way 1
+        // let mut res: [u32; MAX_SYSCALL_NUM] = [0; MAX_SYSCALL_NUM];
+        // for i in 0..MAX_SYSCALL_NUM {
+        //     res[i] = inner.tasks[task_id].syscall_times[i];
+        // }
+
+        // way 2
+        // let mut res: [u32; MAX_SYSCALL_NUM] = [0; MAX_SYSCALL_NUM];
+        // let _ = &mut res[0..MAX_SYSCALL_NUM]
+        //     .copy_from_slice(&inner.tasks[task_id].syscall_times[0..MAX_SYSCALL_NUM]);
+
+        // way 3
+        // let mut res: [u32; MAX_SYSCALL_NUM] = [0; MAX_SYSCALL_NUM];
+        // res.iter_mut()
+        //     .zip(inner.tasks[task_id].syscall_times.iter().copied())
+        //     .for_each(|(x, y)| {
+        //         *x = y;
+        //     });
+
+        // way 4
+        match inner.tasks[task_id]
+            .syscall_times
+            .iter()
+            .copied()
+            .collect::<Vec<u32>>()
+            .try_into()
+        {
+            Ok(r) => r,
+            Err(_) => panic! {"syscall's length can't be matched!"},
+        }
     }
 
     fn record_curr_task_syscall_times(&self, syscall_id: usize) {
@@ -187,7 +219,7 @@ impl TaskManager {
     }
 
     fn get_curr_task_running_time(&self) -> usize {
-        let inner = self.inner.exclusive_access();
+        let inner = self.inner.get_ref();
         let task_id = inner.current_task;
         let begin_time = inner.tasks[task_id].begin_time;
 

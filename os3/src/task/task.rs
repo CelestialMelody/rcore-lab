@@ -1,19 +1,17 @@
 use crate::config::MAX_SYSCALL_NUM;
 
-// solve way: use vec
-// use alloc::vec::Vec;
+use alloc::vec::Vec;
 
 use super::TaskContext;
 
-// #[derive(Copy, Clone)]
 #[derive(Clone)]
 pub struct TaskControlBlock {
     pub task_status: TaskStatus,
     pub task_cx: TaskContext,
 
     // lab1
-    pub syscall_times: [u32; MAX_SYSCALL_NUM], // solve way: use vec
-    // pub syscall_times: Vec<u32>,
+    // pub syscall_times: [u32; MAX_SYSCALL_NUM], // solve way: use vec
+    pub syscall_times: Vec<u32>,
     pub first_run: bool,
     pub begin_time: usize,
     pub end_time: usize,
@@ -25,8 +23,8 @@ impl TaskControlBlock {
             task_cx: TaskContext::init(),
             task_status: TaskStatus::UnInit,
 
-            // syscall_times: Vec::with_capacity(MAX_SYSCALL_NUM),
-            syscall_times: [0; MAX_SYSCALL_NUM],
+            syscall_times: Vec::with_capacity(MAX_SYSCALL_NUM),
+            // syscall_times: [0; MAX_SYSCALL_NUM],
             first_run: true,
             begin_time: 0,
             end_time: 0,
