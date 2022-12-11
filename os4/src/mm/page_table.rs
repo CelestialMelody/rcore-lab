@@ -1,0 +1,195 @@
+use alloc::vec;
+use alloc::vec::Vec;
+use bitflags::*;
+
+use super::{
+    address::{PhysPageNum, StepByOne, VirtAddr, VirtPageNum},
+    frame_allocator::{frame_alloc, FrameTracker},
+};
+
+bitflags! {
+    pub struct PTEFlags: u8 {
+        const V = 1 << 0;
+        const R = 1 << 1;
+        const W = 1 << 2;
+        const X = 1 << 3;
+        const U = 1 << 4;
+        const G = 1 << 5;
+        const A = 1 << 6;
+        const D = 1 << 7;
+    }
+}
+
+#[derive(Clone, Copy)]
+#[repr(C)]
+/// Page table entry
+/// 让编译器自动为 PageTableEntry 实现 Copy/Clone Trait，来让这个类型以值语义赋值/传参的时候不会发生所有权转移，而是拷贝一份新的副本。
+/// 从这一点来说 PageTableEntry 就和 usize 一样，因为它也只是后者的一层简单包装，并解释了 usize 各个比特段的含义
+pub struct PageTableEntry {
+    pub bits: usize,
+}
+
+impl PageTableEntry {
+    /// 从一个物理页号 PhysPageNum 和一个页表项标志位 PTEFlags 生成一个页表项 PageTableEntry 实例
+    pub fn new(ppn: PhysPageNum, flags: PTEFlags) -> Self {
+        PageTableEntry {
+            bits: ppn.0 << 10 | flags.bits as usize,
+        }
+    }
+
+    /// empty 方法生成一个全零的页表项，注意这隐含着该页表项的 V 标志位为 0 ，因此它是不合法的
+    pub fn empty() -> Self {
+        PageTableEntry { bits: 0 }
+    }
+
+    pub fn get_ppn(&self) -> PhysPageNum {
+        (self.bits >> 10 & (1usize << 44) - 1).into()
+    }
+
+    pub fn get_flags(&self) -> PTEFlags {
+        PTEFlags::from_bits(self.bits as u8).unwrap()
+    }
+
+    pub fn is_valid(&self) -> bool {
+        self.get_flags().contains(PTEFlags::V)
+        // (self.get_flags() & PTEFlags::V) != PTEFlags::empty()
+    }
+
+    pub fn is_readable(&self) -> bool {
+        self.get_flags().contains(PTEFlags::R)
+        // (self.get_flags() & PTEFlags::R) != PTEFlags::empty()
+    }
+
+    pub fn is_writable(&self) -> bool {
+        self.get_flags().contains(PTEFlags::W)
+        // (self.get_flags() & PTEFlags::W) != PTEFlags::empty()
+    }
+
+    pub fn is_executable(&self) -> bool {
+        self.get_flags().contains(PTEFlags::X)
+        // (self.get_flags() & PTEFlags::X) != PTEFlags::empty()
+    }
+}
+
+/// 每个应用的地址空间都对应一个不同的多级页表，这也就意味这不同页表的起始地址（即页表根节点的 phys 地址）是不一样的;
+/// 因此 PageTable 要保存它根节点的物理页号 root_ppn 作为页表唯一的区分标志;
+/// 向量 frames 以 FrameTracker 的形式保存了页表所有的节点（包括根节点）所在的物理页帧
+/// 将这些 FrameTracker 的生命周期进一步绑定到 PageTable 下面;
+/// 当 PageTable 生命周期结束后，向量 frames 里面的那些 FrameTracker 也会被回收，也就意味着存放多级页表节点的那些物理页帧被回收了
+pub struct PageTable {
+    root_ppn: PhysPageNum,
+    frames: Vec<FrameTracker>,
+}
+
+impl PageTable {
+    /// 通过 new 方法新建一个 PageTable 的时候，它只需有一个根节点
+    /// 为此我们需要分配一个物理页帧 FrameTracker 并挂在向量 frames 下，
+    /// 然后更新根节点的物理页号 root_ppn
+    pub fn new() -> Self {
+        let frame = frame_alloc().unwrap();
+        PageTable {
+            root_ppn: frame.ppn,
+            frames: vec![frame],
+        }
+    }
+
+    pub fn from_token(satp: usize) -> Self {
+        Self {
+            root_ppn: PhysPageNum::from(satp & ((1usize << 44) - 1)),
+            frames: Vec::new(),
+        }
+    }
+
+    fn find_pte_or_create(&mut self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {
+        let mut idxs = vpn.indexes();
+        let mut ppn = self.root_ppn;
+        let mut result: Option<&mut PageTableEntry> = None;
+
+        for (i, idx) in idxs.iter_mut().enumerate() {
+            let pte = &mut ppn.get_pte_array()[*idx];
+            if i == 2 {
+                // 27 bits of vpn (as usize);
+                result = Some(pte);
+                break;
+            }
+            if !pte.is_valid() {
+                let frame = frame_alloc().unwrap();
+                *pte = PageTableEntry::new(frame.ppn, PTEFlags::V);
+                self.frames.push(frame);
+            }
+            ppn = pte.get_ppn();
+        }
+        result
+    }
+
+    fn find_pte(&self, vpn: VirtPageNum) -> Option<&PageTableEntry> {
+        let idxs = vpn.indexes();
+        let mut ppn = self.root_ppn;
+        let mut result: Option<&PageTableEntry> = None;
+
+        for (i, idx) in idxs.iter().enumerate() {
+            let pte = &ppn.get_pte_array()[*idx];
+            if i == 2 {
+                result = Some(pte);
+                break;
+            }
+            if !pte.is_valid() {
+                return None;
+            }
+            ppn = pte.get_ppn();
+        }
+        result
+    }
+
+    // 多级页表并不是被创建出来之后就不再变化的，
+    // 为了 MMU 能够通过地址转换正确找到应用地址空间中的数据实际被内核放在内存中位置，
+    // 操作系统需要动态维护一个虚拟页号到页表项的映射，支持插入/删除键值对
+
+    #[allow(unused)]
+    /// 通过 map 方法来在多级页表中插入一个键值对，注意这里将物理页号 ppn 和页表项标志位 flags 作为不同的参数传入
+    pub fn map(&mut self, vpn: VirtPageNum, ppn: PhysPageNum, flags: PTEFlags) {
+        let pte = self.find_pte_or_create(vpn).unwrap();
+        assert!(!pte.is_valid(), "vpn {:?} is mapped before mapping", vpn);
+        *pte = PageTableEntry::new(ppn, flags | PTEFlags::V);
+    }
+
+    /// 通过 unmap 方法来删除一个键值对，在调用时仅需给出作为索引的虚拟页号
+    #[allow(unused)]
+    pub fn unmap(&mut self, vpn: VirtPageNum) {
+        let pte = self.find_pte_or_create(vpn).unwrap();
+        assert!(pte.is_valid(), "vpn {:?} is invalid before unmmaping", vpn);
+        *pte = PageTableEntry::empty();
+    }
+
+    pub fn translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {
+        // https://rustwiki.org/zh-CN/core/option/enum.Option.html#method.copied
+        self.find_pte(vpn).copied()
+    }
+
+    pub fn token(&self) -> usize {
+        8usize << 60 | self.root_ppn.0
+    }
+}
+
+/// translate a pointer to a mutable u8 Vec through page table
+pub fn translate_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&'static mut [u8]> {
+    let page_table = PageTable::from_token(token);
+    let mut start = ptr as usize;
+    let end = start + len;
+    let mut v: Vec<&mut [u8]> = Vec::new();
+    while start < end {
+        let start_va = VirtAddr::from(start);
+        let mut vpn = start_va.floor();
+        let ppn = page_table.translate(vpn).unwrap().get_ppn();
+        vpn.step(); // vpn += 1, next page
+        let end_va: VirtAddr = vpn.into();
+        if end_va.page_offset() == 0 {
+            // end_va is page aligned
+            v.push(&mut ppn.get_byte_array()[start_va.page_offset()..]);
+        } else {
+            v.push(&mut ppn.get_byte_array()[start_va.page_offset()..end_va.page_offset()]);
+        }
+        start = end_va.into();
+    }
+    v
+}
