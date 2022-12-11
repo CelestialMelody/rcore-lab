@@ -3,7 +3,9 @@
 use std::fs::{read_dir, File};
 use std::io::{Result, Write};
 
-static TARGET_PATH: &str = "../user/target/riscv64gc-unknown-none-elf/release/";
+// static TARGET_PATH: &str = "../user/target/riscv64gc-unknown-none-elf/release/";
+// fix
+static TARGET_PATH: &str = "../user/build/bin/";
 
 fn main() {
     println!("cargo:rerun-if-changed=../user/src/"); // 重新编译
@@ -17,7 +19,10 @@ fn main() {
 fn insert_app_data() -> Result<()> {
     let mut f = File::create("src/link_app.S").unwrap();
     // Vec<_> `_`是类型占位符, Rust 编译器推断什么类型进入Vec
-    let mut apps: Vec<_> = read_dir("../user/src/bin")
+
+    // let mut apps: Vec<_> = read_dir("../user/src/bin")
+    // fix
+    let mut apps: Vec<_> = read_dir(TARGET_PATH)
         .unwrap()
         .into_iter()
         .map(|dir_entry| {
