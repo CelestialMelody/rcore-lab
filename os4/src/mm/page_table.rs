@@ -93,13 +93,7 @@ impl PageTable {
         }
     }
 
-    pub fn from_token(satp: usize) -> Self {
-        Self {
-            root_ppn: PhysPageNum::from(satp & ((1usize << 44) - 1)),
-            frames: Vec::new(),
-        }
-    }
-
+    // 通过 vpn 在多级页表(物理内存)中 查找页表项
     fn find_pte_or_create(&mut self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {
         let mut idxs = vpn.indexes();
         let mut ppn = self.root_ppn;
@@ -161,11 +155,28 @@ impl PageTable {
         *pte = PageTableEntry::empty();
     }
 
+    /// from_token 可以临时创建一个专用来手动查页表的 PageTable ，
+    /// 它仅有一个从传入的 satp token 中得到的多级页表根节点的物理页号，它的 frames 字段为空，也即不实际控制任何资源
+    pub fn from_token(satp: usize) -> Self {
+        Self {
+            root_ppn: PhysPageNum::from(satp & ((1usize << 44) - 1)),
+            frames: Vec::new(),
+        }
+    }
+
+    /// 使用 translate 方法来查找一个虚拟页号对应的页表项
+    /// 如果能够找到页表项，那么它会将页表项拷贝一份并返回，否则返回 None
     pub fn translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {
         // https://rustwiki.org/zh-CN/core/option/enum.Option.html#method.copied
         self.find_pte(vpn).copied()
     }
 
+    // 当遇到需要查一个特定页表（非当前正处在的地址空间的页表时），
+    // 便可先通过 PageTable::from_token 新建一个页表，再调用它的 translate 方法查页表
+
+    /// token 会按照 satp CSR 格式要求 构造一个无符号 64 位无符号整数，
+    /// 使得其分页模式为 SV39 ，且将当前多级页表的根节点所在的物理页号填充进去。
+    /// stap 前 4 个 bit (MODE字段) 设置为 8 时，SV39 分页机制被启用;
     pub fn token(&self) -> usize {
         8usize << 60 | self.root_ppn.0
     }
