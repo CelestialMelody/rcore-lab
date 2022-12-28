@@ -150,7 +150,8 @@ impl PageTable {
     /// 通过 unmap 方法来删除一个键值对，在调用时仅需给出作为索引的虚拟页号
     #[allow(unused)]
     pub fn unmap(&mut self, vpn: VirtPageNum) {
-        let pte = self.find_pte_or_create(vpn).unwrap();
+        // let pte = self.find_pte_or_create(vpn).unwrap();
+        let pte = self.find_pte(vpn).unwrap();
         assert!(pte.is_valid(), "vpn {:?} is invalid before unmmaping", vpn);
         *pte = PageTableEntry::empty();
     }
