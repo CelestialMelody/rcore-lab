@@ -22,8 +22,8 @@ pub const MEMORY_END: usize = 0x80800000;
 pub const PAGE_SIZE: usize = 1 << 12;
 pub const PAGE_SIZE_BITS: usize = 0xc;
 
-pub const TRAMPOLINE: usize = usize::MAX - PAGE_SIZE + 1;
-pub const TRAP_CONTEXT: usize = TRAMPOLINE - PAGE_SIZE;
+pub const TRAMPOLINE: usize = usize::MAX - PAGE_SIZE + 1; // 0xffff_ffff_ffff_f000
+pub const TRAP_CONTEXT: usize = TRAMPOLINE - PAGE_SIZE; // 0xffff_ffff_ffff_e000
 
 /// Return (bottom, top) of a kernel stack in kernel space.
 pub fn kernel_stack_position(app_id: usize) -> (usize, usize) {
