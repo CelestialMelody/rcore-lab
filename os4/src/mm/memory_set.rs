@@ -23,6 +23,7 @@ use alloc::vec::Vec;
 use lazy_static::*;
 use riscv::paging::MapperFlushGPA;
 use riscv::register::satp;
+use riscv::use_sv32;
 use spin::Mutex;
 
 extern "C" {
@@ -265,11 +266,231 @@ impl MemorySet {
         self.page_table.translate(vpn)
     }
 
-    // fn map_trampoline()
+    /// map_trampoline 方法可以将内核的 trampoline 代码段映射到虚拟地址 TRAMPOLINE 上
+    fn map_trampoline(&mut self) {
+        self.page_table.map(
+            VirtAddr::from(TRAMPOLINE).into(), // from usize to VirtAddr, from VirtAddr to VirtPageNum
+            PhysAddr::from(strampoline as usize).into(), // from usize to PhysAddr, from PhysAddr to PhysPageNum
+            PTEFlags::R | PTEFlags::X,
+        );
+    }
 
-    // pub fn new_kernel() -> Self {
-    //     let mut memory_set = Self::new_bare();
-    // }
+    pub fn new_kernel() -> Self {
+        let mut memory_set = Self::new_bare();
 
-    // fn from_elf()
+        // map trampoline
+        memory_set.map_trampoline();
+
+        // map kernel
+        // 内核的四个逻辑段 .text/.rodata/.data/.bss 被恒等映射到物理内存，
+        // 这使得我们在无需调整内核内存布局 os/src/linker.ld 的情况下就仍能象启用页表机制之前那样访问内核的各个段。
+
+        // 从 os/src/linker.ld 中引用了很多表示各个段位置的符号，
+        // 而后在 new_kernel 中，我们从低地址到高地址依次创建 5 个逻辑段并通过 push 方法将它们插入到内核地址空间中
+        info!(".text: [{:#x}, {:#x})", stext as usize, etext as usize);
+        info!(
+            ".rodata: [{:#x}, {:#x})",
+            srodata as usize, erodata as usize
+        );
+        info!(".data: [{:#x}, {:#x})", sdata as usize, edata as usize);
+        info!(
+            ".bss(with_stack): [{:#x}, {:#x})",
+            sbss_with_stack as usize, ebss as usize
+        );
+        info!(
+            "physical memory: [{:#x}, {:#x})",
+            ekernel as usize, MEMORY_END
+        );
+
+        // 借用页表机制对这些逻辑段的访问方式做出了限制，这都是为了在硬件的帮助下能够尽可能发现内核中的 bug;
+        // 四个逻辑段的 U 标志位均未被设置，使得 CPU 只能在处于 S 特权级（或以上）时访问它们；
+
+        info!("mapping .text session");
+        memory_set.push(
+            MapArea::new(
+                (stext as usize).into(),
+                (etext as usize).into(),
+                MapType::Identical,
+                // 代码段 .text 不允许被修改；
+                MapPermission::R | MapPermission::X,
+            ),
+            None,
+        );
+
+        info!("mapping .rodata session");
+        memory_set.push(
+            MapArea::new(
+                (srodata as usize).into(),
+                (erodata as usize).into(),
+                MapType::Identical,
+                // 只读数据段 .rodata 不允许被修改，也不允许从它上面取指执行；
+                MapPermission::R,
+            ),
+            None,
+        );
+
+        info!("mapping .data session");
+        memory_set.push(
+            MapArea::new(
+                (sdata as usize).into(),
+                (edata as usize).into(),
+                MapType::Identical,
+                // .data 允许被读写，但是不允许从它上面取指执行。
+                MapPermission::R | MapPermission::W,
+            ),
+            None,
+        );
+
+        info!("mapping .bss session");
+        memory_set.push(
+            MapArea::new(
+                (sbss_with_stack as usize).into(),
+                (ebss as usize).into(),
+                MapType::Identical,
+                // .bss 允许被读写，但是不允许从它上面取指执行。
+                MapPermission::R | MapPermission::W,
+            ),
+            None,
+        );
+
+        info!("mapping physical memory");
+        // 内核地址空间中需要存在一个恒等映射到内核数据段之外的可用物理页帧的逻辑段，
+        // 这样才能在启用页表机制之后，内核仍能以纯软件的方式读写这些物理页帧
+        memory_set.push(
+            MapArea::new(
+                (ekernel as usize).into(),
+                MEMORY_END.into(),
+                MapType::Identical,
+                // 标志位仅包含 rw ，意味着该逻辑段只能在 S 特权级以上访问，并且只能读写。
+                MapPermission::R | MapPermission::W,
+            ),
+            None,
+        );
+    }
+
+    /// 对 get_app_data 得到的 ELF 格式数据进行解析，找到各个逻辑段所在位置和访问限制并插入进来;
+    /// 返回应用地址空间 memory_set 、用户栈虚拟地址 user_stack_top 以及从解析 ELF 得到的该应用入口点地址，它们将被我们用来创建应用的任务控制块。
+    fn from_elf(elf_data: &[u8]) -> (Self, usize, usize) {
+        let mut memory_set = MemorySet::new_bare();
+
+        // map_trampoline 会将内核的 trampoline 代码段映射到内核地址空间的最高处
+        memory_set.map_trampoline();
+
+        let elf = xmas_elf::ElfFile::new(elf_data).unwrap();
+
+        let elf_header = elf.header;
+
+        // pt1
+        let magic = elf_header.pt1.magic;
+
+        // 检查 elf 文件是否为正确的 elf 文件 (magic number: see https://en.wikipedia.org/wiki/Executable_and_Linkable_Format)
+        assert_eq!(magic, [0x7f, b'E', b'L', b'F']);
+
+        // 获取 program header 的数量
+        let ph_count = elf_header.pt2.ph_count();
+
+        let mut max_end_vpn = VirtPageNum(0);
+
+        // 遍历所有的 program header 并将合适的区域加入到应用地址空间中
+        for i in 0..ph_count {
+            let ph = elf.program_header(i).unwrap();
+            //  program header 的类型是 LOAD ，这表明它有被内核加载的必要
+            // 此时不必理会其他类型的 program header
+            if ph.get_type().unwrap() == xmas_elf::program::Type::Load {
+                // 通过 ph.virtual_addr() 和 ph.mem_size() 来计算这一区域在应用地址空间中的位置
+                let start_va: VirtAddr = (ph.virtual_addr() as usize).into();
+                let end_va: VirtAddr = (ph.virtual_addr() + ph.mem_size() as usize).into();
+
+                let mut map_perm = MapPermission::U;
+
+                // 通过 ph.flags() 来确认这一区域访问方式的限制并将其转换为 MapPermission 类型（注意它默认包含 U 标志位）
+                let ph_flags = ph.flags();
+
+                if ph_flags.is_read() {
+                    map_perm |= MapPermission::R;
+                }
+                if ph_flags.is_write() {
+                    map_perm |= MapPermission::W;
+                }
+                if ph_flags.is_execute() {
+                    map_perm |= MapPermission::X;
+                }
+
+                let map_area = MapArea::new(start_va, end_va, MapType::Framed, map_perm);
+
+                max_end_vpn = map_area.vpn_range.get_end();
+
+                memory_set.push(
+                    map_area,
+                    // 当前 program header 数据被存放的位置可以通过 ph.offset() 和 ph.file_size() 来找到
+                    Some(&elf.input[ph.offset() as usize..(ph.offset() + ph.file_size()) as usize]),
+                );
+
+                // 当存在一部分零初始化的时候， ph.file_size() 将会小于 ph.mem_size() ，因为这些零出于缩减可执行文件大小的原因不应该实际出现在 ELF 数据中
+            }
+        }
+
+        // map user stack with U flags
+        // from vpn to va to usize
+        // 在前面加载各个 program header 的时候，我们就已经维护了 max_end_vpn 记录目前涉及到的最大的虚拟页号，只需紧接着在它上面再放置一个保护页面和用户栈即可。
+        let max_end_va: VirtAddr = max_end_vpn.into();
+        let mut user_stack_bottom: usize = max_end_va.into();
+        // guard page
+        user_stack_bottom += PAGE_SIZE;
+
+        let user_stack_top = user_stack_bottom + USER_STACK_SIZE;
+
+        memory_set.push(
+            MapArea::new(
+                user_stack_bottom.into(),
+                user_stack_top.into(),
+                MapType::Framed,
+                MapPermission::R | MapPermission::W | MapPermission::U,
+            ),
+            None,
+        );
+
+        // map TrapContext
+        // 在应用地址空间中映射次高页面来存放 Trap 上下文
+        memory_set.push(
+            MapArea::new(
+                TRAP_CONTEXT.into(),
+                TRAMPOLINE.into(),
+                MapType::Framed,
+                MapPermission::R | MapPermission::W,
+            ),
+            None,
+        );
+
+        // 返回应用地址空间 memory_set 、用户栈虚拟地址 user_stack_top 以及从解析 ELF 得到的该应用入口点地址，它们将被我们用来创建应用的任务控制块。
+        (
+            memory_set,
+            user_stack_top,
+            elf.header.pt2.entry_point() as usize,
+        )
+    }
+}
+
+#[allow(unused)]
+pub fn remap_test() {
+    let mut kernel_space = KERNEL_SPACE.lock();
+    let mid_text: VirtAddr = ((stext as usize + etext as usize) / 2).into();
+    let mid_rodata: VirtAddr = ((srodata as usize + erodata as usize) / 2).into();
+    let mid_data: VirtAddr = ((sdata as usize + edata as usize) / 2).into();
+    assert!(!kernel_space
+        .page_table
+        .translate(mid_text.floor())
+        .unwrap()
+        .writable());
+    assert!(!kernel_space
+        .page_table
+        .translate(mid_rodata.floor())
+        .unwrap()
+        .writable());
+    assert!(!kernel_space
+        .page_table
+        .translate(mid_data.floor())
+        .unwrap()
+        .executable());
+    info!("remap_test passed!");
 }
