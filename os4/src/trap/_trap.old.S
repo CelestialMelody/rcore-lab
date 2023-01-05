@@ -1,24 +1,26 @@
 # 在 trap.S 开头加上 .altmacro 才能正常使用 .rept 命令
 .altmacro
 .macro SAVE_GP n # 变量 n; 宏
-    sd x\n, \n*8(sp) # \n (解引用)n的值
+    sd x\n, \n*8(sp) # \n 大概解释为n的值
 .endm
 .macro LOAD_GP n
     ld x\n, \n*8(sp)
 .endm
-    .section .text.trampoline
+    # .section .text
+    .section .text.trampoline # os4 change
     # 用外部符号 __alltraps 和 __restore 标记为函数
     .globl __alltraps
     .globl __restore
     .align 2 # 4字节对齐
 
+# 进入 S 特权级的 Trap 处理之前，必须保存原控制流的寄存器状态，这一般通过 内核栈来保存
+# 首先通过 __alltraps 将 Trap 上下文保存在内核栈上，
+# 然后跳转到使用 Rust 编写的 trap_handler 函数完成 Trap 分发及处理。
+# 当 trap_handler 返回之后，使用 __restore 从保存在内核栈上的 Trap 上下文恢复寄存器。
+# 最后通过一条 sret 指令回到应用程序执行
 
 # 用外部符号 __alltraps 和 __restore 标记为函数
 __alltraps:
-    # 当应用 Trap 进入内核的时候，硬件会设置一些 CSR 并在 S 特权级下跳转到 __alltraps 保存 Trap 上下文
-    # 此时 sp 寄存器仍指向用户栈，但 sscratch 则被设置为指向应用地址空间中存放 Trap 上下文的位置（实际在次高页面）。
-    # 随后，就像之前一样，我们 csrrw 交换 sp 和 sscratch ，并基于指向 Trap 上下文位置的 sp 开始保存通用寄存器和一些 CSR
-
     # 保存 Trap 上下文
     # csrrw 原型是 csrrw rd, csr, rs 可以将 CSR 当前的值读到通用寄存器 rd 中，然后将通用寄存器 rs 的值写入该 CSR 。
     # 因此这里起到的是交换 sscratch 和 sp 的效果。
@@ -26,6 +28,10 @@ __alltraps:
     csrrw sp, sscratch, sp
 
     # now sp->kernel stack, sscratch->user stack
+
+    # allocate a TrapContext on kernel stack
+    # RISC-V 架构中，栈是从高地址向低地址增长的，因此这里先减去 TrapContext 的大小，然后将 sp 指向这个位置。   
+    # addi sp, sp, -34*8 # os4 delete this
 
     # save general-purpose registers
     # skip x0, x0 被硬编码为 0
@@ -60,49 +66,47 @@ __alltraps:
     csrr t2, sscratch # 将 sscratch 的值读到寄存器 t2
     sd t2, 2*8(sp) # 保存到内核栈上
 
-    # 到这里，我们就全程在应用地址空间中完成了保存 Trap 上下文的工作。
-
-    # 将内核地址空间的 token 载入到 t0 寄存器中
-    ld t0, 34*8(sp) # kernel_stap
-
-    # 将 trap handler 入口点的虚拟地址载入到 t1 寄存器中
-    ld t1, 36*8(sp) # trap_handler
-
+    ld t0, 34*8(sp) # os4 add; kernel_stap
+    ld t1, 36*8(sp) # os4 add; trap_handler
     # move to kernel_sp
-    # 直接将 sp 修改为应用内核栈顶的地址
-    ld sp, 35*8(sp) # kernel_sp
-
+    ld sp, 35*8(sp) # os4 add; kernel_sp
     # switch to kernel space
-    # 将 satp 修改为内核地址空间的 token 并使用 sfence.vma 刷新快表，这就切换到了内核地址空间
     csrw satp, t0
+
     # 清空快表
     # 一旦我们修改 satp 就会切换地址空间，快表中的键值对就会失效（因为快表保存着老地址空间的映射关系，切换到新地址空间后，老的映射关系就没用了）。
     # 为了确保 MMU 的地址转换能够及时与 satp 的修改同步，我们需要立即使用 sfence.vma 指令将快表清空，这样 MMU 就不会看到快表中已经过期的键值对了。
     sfence.vma
-
     # jump to trap_handler
-    # 通过 jr 指令跳转到 t1 寄存器所保存的trap handler 入口点的地址
     jr t1
-    # 不能像之前的章节那样直接 call trap_handler
 
-    # 现在 sscratch 的值是进入 Trap 之前的 sp 的值，指向用户栈。而现在的 sp 则指向内核栈。
+    # 注意： sscratch 的值是进入 Trap 之前的 sp 的值，指向用户栈。而现在的 sp 则指向内核栈。
+    # set input argument of trap_handler(cx: &mut TrapContext)
+    # 寄存器 a0 指向内核栈的栈顶 sp
+    # mv a0, sp # os4 delete this 
+    # 让寄存器 a0 指向内核栈的栈指针也就是我们刚刚保存的 Trap 上下文的地址，
+    # 这是由于我们接下来要调用 trap_handler 进行 Trap 处理，它的第一个参数 cx 由调用规范要从 a0 中获取。
+    # 而 Trap 处理函数 trap_handler 需要 Trap 上下文的原因在于：
+    # 它需要知道其中某些寄存器的值，比如在系统调用的时候应用程序传过来的 syscall ID 和对应参数。
+    # 我们不能直接使用这些寄存器现在的值，因为它们可能已经被修改了，因此要去内核栈上找已经被保存下来的值
+
+    # trap_handler(cx: &mut TrapContext) -> &mut TrapContext
+    # 参数 cx 使用 a0 传参，使用 a0 作为返回 故没有改变
+    # call trap_handler # os4 delete this
 
 __restore:
     # case1: start running app by __restore
     # case2: back to U after handling trap
+    #  __restore 的实现需要做出变化：它不再需要 在开头 mv sp, a0 了
+    # 因为在 __switch 之后, sp 就已经正确指向了我们需要的 Trap 上下文地址
+    # mv sp, a0 # 传入参数a0: 内核栈中保存的用户上下文; os3 delete this
 
-    # 当内核将 Trap 处理完毕准备返回用户态的时候会 调用 __restore （符合RISC-V函数调用规范），它有两个参数：
-    # 第一个是 Trap 上下文在应用地址空间中的位置，这个对于所有的应用来说都是相同的，在 a0 寄存器中传递；
-    # 第二个则是即将回到的应用的地址空间的 token ，在 a1 寄存器中传递
-
+    # o4 add
     # a0: *TrapContext in user space(Constant); a1: user space token（内核页表的起始物理地址）
     # switch to user space
-    # 先切换回应用地址空间（注：Trap 上下文是保存在应用地址空间中）
     csrw satp, a1
     sfence.vma
-    # 将传入的 Trap 上下文位置保存在 sscratch 寄存器中，这样 __alltraps 中才能基于它将 Trap 上下文保存到正确的位置
     csrw sscratch, a0
-    # 将 sp 修改为 Trap 上下文的位置，后面基于它恢复各通用寄存器和 CSR
     mv sp, a0
 
     # now sp points to TrapContext in user space, start restoring based on it
@@ -113,8 +117,13 @@ __restore:
     # restore sstatus/sepc
     ld t0, 32*8(sp) # sstatus
     ld t1, 33*8(sp) # sepc
+
+    # ld t2, 2*8(sp) # sscratch; x2(sp) 指向 USER_STACK 栈; os4 delete
+
     csrw sstatus, t0
     csrw sepc, t1
+
+    # csrw sscratch, t2 # os4 delete
 
     # restore general-purpuse registers except sp/tp
     ld x1, 1*8(sp)
@@ -125,10 +134,18 @@ __restore:
         .set n, n+1
     .endr
     
-    # 目前 sp 指向保存了 Trap 上下文之后的内核栈栈顶， sscratch 指向用户栈栈顶。
+    # now sp 指向保存了 Trap 上下文之后的内核栈栈顶， sscratch 指向用户栈栈顶。
+
+    # 在内核栈上回收 Trap 上下文所占用的内存，回归进入 Trap 之前的内核栈栈顶 
+    # release TrapContext on kernel stack
+    # addi sp, sp, 34*8 # os4 delete
+
+    # 再次交换 sscratch 和 sp，现在 sp 重新指向用户栈，sscratch 也依然保存进入 Trap 之前的状态并指向内核栈栈顶
+    # now sp->kernel stack, sscratch->user stack
+    # csrrw sp, sscratch, sp # os4 delete
 
     # back to user stack
-    ld sp, 2*8(sp)
+    ld sp, 2*8(sp) # os4 add
 
     # 在应用程序控制流状态被还原之后，使用 sret 指令回到 U 特权级继续运行应用程序控制流
     sret
