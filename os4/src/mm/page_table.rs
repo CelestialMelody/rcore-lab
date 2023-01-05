@@ -42,32 +42,32 @@ impl PageTableEntry {
         PageTableEntry { bits: 0 }
     }
 
-    pub fn get_ppn(&self) -> PhysPageNum {
+    pub fn ppn(&self) -> PhysPageNum {
         (self.bits >> 10 & (1usize << 44) - 1).into()
     }
 
-    pub fn get_flags(&self) -> PTEFlags {
+    pub fn flags(&self) -> PTEFlags {
         PTEFlags::from_bits(self.bits as u8).unwrap()
     }
 
     pub fn is_valid(&self) -> bool {
-        self.get_flags().contains(PTEFlags::V)
-        // (self.get_flags() & PTEFlags::V) != PTEFlags::empty()
+        self.flags().contains(PTEFlags::V)
+        // (self.flags() & PTEFlags::V) != PTEFlags::empty()
     }
 
     pub fn is_readable(&self) -> bool {
-        self.get_flags().contains(PTEFlags::R)
-        // (self.get_flags() & PTEFlags::R) != PTEFlags::empty()
+        self.flags().contains(PTEFlags::R)
+        // (self.flags() & PTEFlags::R) != PTEFlags::empty()
     }
 
     pub fn is_writable(&self) -> bool {
-        self.get_flags().contains(PTEFlags::W)
-        // (self.get_flags() & PTEFlags::W) != PTEFlags::empty()
+        self.flags().contains(PTEFlags::W)
+        // (self.flags() & PTEFlags::W) != PTEFlags::empty()
     }
 
     pub fn is_executable(&self) -> bool {
-        self.get_flags().contains(PTEFlags::X)
-        // (self.get_flags() & PTEFlags::X) != PTEFlags::empty()
+        self.flags().contains(PTEFlags::X)
+        // (self.flags() & PTEFlags::X) != PTEFlags::empty()
     }
 }
 
@@ -111,7 +111,7 @@ impl PageTable {
                 *pte = PageTableEntry::new(frame.ppn, PTEFlags::V);
                 self.frames.push(frame);
             }
-            ppn = pte.get_ppn();
+            ppn = pte.ppn();
         }
         result
     }
@@ -130,7 +130,7 @@ impl PageTable {
             if !pte.is_valid() {
                 return None;
             }
-            ppn = pte.get_ppn();
+            ppn = pte.ppn();
         }
         result
     }
@@ -192,7 +192,7 @@ pub fn translate_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&'
     while start < end {
         let start_va = VirtAddr::from(start);
         let mut vpn = start_va.floor();
-        let ppn = page_table.translate(vpn).unwrap().get_ppn();
+        let ppn = page_table.translate(vpn).unwrap().ppn();
         vpn.step(); // vpn += 1, next page
         let end_va: VirtAddr = vpn.into();
         if end_va.page_offset() == 0 {

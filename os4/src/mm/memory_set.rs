@@ -36,7 +36,7 @@ extern "C" {
     fn sbss_with_stack();
     fn ebss();
     fn ekernel();
-    fn strampoline();
+    fn strampoline(); // 实际上与 __alltraps 地址相同
 }
 
 /// MapType 描述该逻辑段内的所有虚拟页面映射到物理页帧的同一种方式。
@@ -220,6 +220,7 @@ impl MemorySet {
         }
     }
 
+    /// 内核页表的起始物理地址
     /// token 会按照 satp CSR 格式要求 构造一个无符号 64 位无符号整数，
     /// 使得其分页模式为 SV39 ，并将当前多级页表的根节点所在的物理页号填充进去。
     pub fn token(&self) -> usize {
@@ -232,6 +233,8 @@ impl MemorySet {
         let stap = self.page_table.token();
         unsafe {
             stap::write(stap);
+            // 一旦我们修改 satp 就会切换地址空间，快表中的键值对就会失效（因为快表保存着老地址空间的映射关系，切换到新地址空间后，老的映射关系就没用了）。
+            // 为了确保 MMU 的地址转换能够及时与 satp 的修改同步，我们需要立即使用 sfence.vma 指令将快表清空，这样 MMU 就不会看到快表中已经过期的键值对了。
             core::arch::asm!("sfence.vma");
         }
     }
@@ -266,7 +269,8 @@ impl MemorySet {
         self.page_table.translate(vpn)
     }
 
-    /// map_trampoline 方法可以将内核的 trampoline 代码段映射到虚拟地址 TRAMPOLINE 上
+    /// map_trampoline 方法可以将内核的 trampoline 代码段映射到虚拟地址 TRAMPOLINE 上.
+    /// 为了实现方便并没有新增逻辑段 MemoryArea 而是直接在多级页表中插入一个从地址空间的最高虚拟页面映射到跳板汇编代码所在的物理页帧的键值对，访问权限与代码段相同，即 RX （可读可执行）。
     fn map_trampoline(&mut self) {
         self.page_table.map(
             VirtAddr::from(TRAMPOLINE).into(), // from usize to VirtAddr, from VirtAddr to VirtPageNum
@@ -370,7 +374,7 @@ impl MemorySet {
 
     /// 对 get_app_data 得到的 ELF 格式数据进行解析，找到各个逻辑段所在位置和访问限制并插入进来;
     /// 返回应用地址空间 memory_set 、用户栈虚拟地址 user_stack_top 以及从解析 ELF 得到的该应用入口点地址，它们将被我们用来创建应用的任务控制块。
-    fn from_elf(elf_data: &[u8]) -> (Self, usize, usize) {
+    pub fn from_elf(elf_data: &[u8]) -> (Self, usize, usize) {
         let mut memory_set = MemorySet::new_bare();
 
         // map_trampoline 会将内核的 trampoline 代码段映射到内核地址空间的最高处
