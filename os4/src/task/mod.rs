@@ -5,7 +5,7 @@ mod switch;
 mod task;
 
 use crate::config::{MAX_APP_NUM, MAX_SYSCALL_NUM};
-use crate::loader::{get_num_apps, init_app_cx};
+use crate::loader::{get_app_data, get_num_apps};
 use crate::sync::UnSafeCell;
 use crate::timer::get_time_micro;
 
@@ -33,18 +33,20 @@ pub struct TaskManagerInner {
 
 lazy_static! {
     pub static ref TASK_MANAGER: TaskManager = {
+        info!("init TASK_MANAGER");
+
         let num_apps = get_num_apps();
 
-        // let mut tasks = [TaskControlBlock::new(); MAX_APP_NUM];
-        let mut tasks: Vec<TaskControlBlock> = Vec::with_capacity(MAX_APP_NUM);
-        for _ in 0..MAX_APP_NUM {
-            tasks.push(TaskControlBlock::new());
-        }
+        info!("num_apps: {}", num_apps);
 
-        // we can see that every task has its own stack
-        for (i, t) in tasks.iter_mut().enumerate().take(num_apps) { // take(num_apps) 保证只初始化 num_apps 个任务; iterater::take() 用于限制迭代器的长度
-            t.task_cx = TaskContext::goto_restore(init_app_cx(i)); // 初始化任务上下文
-            t.task_status = TaskStatus::Ready;
+        // let mut tasks = [TaskControlBlock::new(); MAX_APP_NUM]; // out of memory
+
+        // 在 TaskManagerInner 中我们使用向量 Vec 来保存任务控制块。
+        // 在全局任务管理器 TASK_MANAGER 初始化的时候，只需使用 loader 子模块提供的 get_num_app 和 get_app_data
+        // 分别获取链接到内核的应用数量和每个应用的 ELF 文件格式的数据，然后依次给每个应用创建任务控制块并加入到向量中即可。
+        let mut tasks: Vec<TaskControlBlock> = Vec::with_capacity(MAX_APP_NUM);
+        for _ in 0..num_apps {
+            tasks.push(TaskControlBlock::new(get_app_data(i), i));
         }
 
         TaskManager {
@@ -200,6 +202,19 @@ impl TaskManager {
             _ => get_time_micro() - begin_time,
         }
     }
+
+    /// Get the current 'Running' task's token.
+    fn get_current_token(&self) -> usize {
+        let inner = self.inner.exclusive_access();
+        inner.tasks[inner.current_task].user_token()
+    }
+
+    #[allow(clippy::mut_from_ref)]
+    /// Get the current 'Running' task's trap contexts.
+    fn get_current_trap_cx(&self) -> &mut TrapContext {
+        let inner = self.inner.exclusive_access();
+        inner.tasks[inner.current_task].trap_cx()
+    }
 }
 
 /// call from rust_main,
@@ -250,4 +265,16 @@ pub fn record_curr_task_syscall_times(syscall_id: usize) {
 
 pub fn get_curr_task_running_time() -> usize {
     TASK_MANAGER.get_curr_task_running_time()
+}
+
+// 通过 current_user_token 和 current_trap_cx 分别可以获得当前正在执行的应用的地址空间的 token 和可以在内核地址空间中修改位于该应用地址空间中的 Trap 上下文的可变引用。
+
+/// Get the current 'Running' task's token.
+pub fn current_user_token() -> usize {
+    TASK_MANAGER.get_current_token()
+}
+
+/// Get the current 'Running' task's trap contexts.
+pub fn current_trap_cx() -> &'static mut TrapContext {
+    TASK_MANAGER.get_current_trap_cx()
 }

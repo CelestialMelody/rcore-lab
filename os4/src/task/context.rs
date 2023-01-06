@@ -1,3 +1,5 @@
+use create::trap::trap_return;
+
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct TaskContext {
@@ -21,7 +23,7 @@ impl TaskContext {
             fn __restore(); // no need pass any argument
         }
         Self {
-            ra: __restore as usize, // ra = __restore, so
+            ra: __restore as usize, // ra = __restore
             sp: kstack_ptr,
             // UNKNOWN: why 0?
             // 内核态第一次进入用户态执行用户态
@@ -30,6 +32,14 @@ impl TaskContext {
             // 真正有意义的是 TaskContext中 ra 和 sp 两个寄存器的值，
             // 它们能帮助我们从内核栈的位置开始执行 __restore 回到用户态;
             // 这个过程中 s0-s11 会被覆盖，但正如之前所说这些寄存器的值目前本来就是无意义的，可以随意覆盖
+            s: [0; 12],
+        }
+    }
+    pub fn goto_trap_return(kstack_ptr: usize) -> Self {
+        // 在构造方式上，只是将 ra 寄存器的值设置为 trap_return 的地址。 trap_return 是 os4 新版的 Trap 处理的一部分。
+        Self {
+            ra: trap_return as usize,
+            sp: kstack_ptr,
             s: [0; 12],
         }
     }
