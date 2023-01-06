@@ -16,6 +16,8 @@ use riscv::register::sstatus::{self, Sstatus, SPP};
 */
 // 1. size = 34 * 8 Bytes -> see trap.S
 // 2. 不要改成员顺序; 内存布局 -> trap.S
+// 应用初始化的时候由内核写入应用地址空间中的 TrapContext 的相应位置，此后就不再被修改
+// 问题： rust 声明字段不可变，但是仍然可以通过汇编代码来修改对吗？
 pub struct TrapContext {
     // 保存寄存器的值; 通用寄存器 x0~x31
     pub x: [usize; 32],
@@ -23,6 +25,13 @@ pub struct TrapContext {
     pub sstatus: Sstatus,
     // 保存异常发生时的程序计数器
     pub sepc: usize,
+    // 后面三个字段不再被修改, 均是内核在初始化该应用的时候就已经设置好的
+    // kernel_satp 表示内核地址空间的 token ，即内核页表的起始物理地址
+    pub kernel_satp: usize,
+    // kernel_sp 表示当前应用在内核地址空间中的 内核栈栈顶 的虚拟地址
+    pub kernel_sp: usize,
+    // trap_handler 表示内核中 trap handler 入口点的虚拟地址
+    pub tarp_handler: usize,
 }
 
 /// 当批处理操作系统初始化完成，或者是某个应用程序运行结束或出错的时候，调用 run_next_app 函数切换到下一个应用程序
@@ -40,7 +49,14 @@ impl TrapContext {
     pub fn set_sp(&mut self, sp: usize) {
         self.x[2] = sp; // x2 is sp
     }
-    pub fn app_init_context(entry: usize, sp: usize) -> Self {
+
+    pub fn app_init_context(
+        entry: usize,
+        sp: usize,
+        kernel_satp: usize,
+        kernel_sp: usize,
+        tarp_handler: usize,
+    ) -> Self {
         let mut sstatus = sstatus::read(); // 读取 sstatus 寄存器
         sstatus.set_spp(SPP::User);
         // 修改 sepc 寄存器为应用程序入口点 entry(APP_BASE_ADDRESS)，
@@ -50,6 +66,11 @@ impl TrapContext {
             x: [0; 32],
             sepc: entry, // APP_BASE_ADDRESS: 0x80400000
             sstatus,
+
+            // 补充让应用在 __alltraps 能够顺利进入到内核地址空间并跳转到 trap handler 入口点的相关信息
+            kernel_satp,
+            kernel_sp,
+            tarp_handler,
         };
         context.set_sp(sp);
         context
