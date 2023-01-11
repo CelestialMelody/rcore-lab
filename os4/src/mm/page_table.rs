@@ -183,12 +183,15 @@ impl PageTable {
     }
 }
 
-/// translate a pointer to a mutable u8 Vec through page table
-pub fn translate_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&'static mut [u8]> {
+/// translated_byte_buffer 会以向量的形式返回一组可以在内核空间中直接访问的字节数组切片（注：这个缓冲区的内核虚拟地址范围有可能是不连续的）
+/// 将应用地址空间中一个缓冲区转化为在内核空间中能够直接访问的形式。
+/// 参数中的 token 是某个应用地址空间的 token ， ptr 和 len 则分别表示该地址空间中的一段缓冲区的起始地址和长度(注：这个缓冲区的应用虚拟地址范围是连续的)。
+pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&'static mut [u8]> {
     let page_table = PageTable::from_token(token);
     let mut start = ptr as usize;
     let end = start + len;
     let mut v: Vec<&mut [u8]> = Vec::new();
+
     while start < end {
         let start_va = VirtAddr::from(start);
         let mut vpn = start_va.floor();

@@ -56,5 +56,9 @@ __switch:
     # restore kernel stack of next task
     # add 8: skip TaskStatus -> see TaskControlBlock
     ld sp, 8(a1)
+    # 现在 a1 寄存器保存的是 TaskContaxt 或者说是 TaskContaxt.ra 或者说是 trap_return （去执行__restore)
+    # 当每个应用第一次获得 CPU 使用权即将进入用户态执行的时候，它的内核栈顶放置着我们在 内核加载应用的时候 构造的一个任务上下文
+    # 在 __switch 切换到该应用的任务上下文的时候，内核将会跳转到 trap_return 并返回用户态开始该应用的启动执行
+
     ret
 

@@ -1,3 +1,6 @@
+use crate::mm::translated_byte_buffer;
+use crate::task::current_user_token;
+
 const FD_STDOUT: usize = 1;
 
 /// 将传入的位于应用程序内的缓冲区的开始地址和长度转化为一个字符串 &str ，
@@ -7,10 +10,17 @@ const FD_STDOUT: usize = 1;
 pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
     match fd {
         FD_STDOUT => {
-            let slice = unsafe { core::slice::from_raw_parts(buf, len) };
-            let s = core::str::from_utf8(slice).unwrap();
-            print!("{}", s);
-            len as isize
+            // before os4
+            // let slice = unsafe { core::slice::from_raw_parts(buf, len) };
+            // let s = core::str::from_utf8(slice).unwrap();
+            // print!("{}", s);
+            // len as isize
+
+            let buffers = translated_byte_buffer(current_user_token(), buf, len);
+            for buf in buffers {
+                let s = core::str::from_utf8(buf).unwrap();
+                print!("{}", s);
+            }
         }
         _ => panic!("Unknown fd: {} in sys_write!", fd),
     }

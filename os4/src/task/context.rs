@@ -1,4 +1,4 @@
-use create::trap::trap_return;
+use crate::trap::trap_return;
 
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -17,7 +17,7 @@ impl TaskContext {
         }
     }
 
-    /// 用于创建新的任务, 传入任务的入口地址
+    /// os3 用于创建新的任务, 传入任务的入口地址
     pub fn goto_restore(kstack_ptr: usize) -> Self {
         extern "C" {
             fn __restore(); // no need pass any argument
@@ -35,9 +35,13 @@ impl TaskContext {
             s: [0; 12],
         }
     }
+
+    // os4
     pub fn goto_trap_return(kstack_ptr: usize) -> Self {
         // 在构造方式上，只是将 ra 寄存器的值设置为 trap_return 的地址。 trap_return 是 os4 新版的 Trap 处理的一部分。
         Self {
+            // 当每个应用第一次获得 CPU 使用权即将进入用户态执行的时候，它的内核栈顶放置着我们在 内核加载应用的时候 构造的一个任务上下文
+            // 在 __switch 切换到该应用的任务上下文的时候，内核将会跳转到 trap_return 并返回用户态开始该应用的启动执行。
             ra: trap_return as usize,
             sp: kstack_ptr,
             s: [0; 12],
