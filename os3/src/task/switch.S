@@ -31,7 +31,6 @@ __switch:
     # part [2] 
     # save kernel stack of current task
     # a0 = current_task_cx_ptr
-    # add 8: skip TaskStatus -> see TaskControlBlock
     sd sp, 8(a0)
     # save ra & s0~s11 of current execution
     sd ra, 0(a0)
@@ -54,7 +53,6 @@ __switch:
 
     # part [4] 
     # restore kernel stack of next task
-    # add 8: skip TaskStatus -> see TaskControlBlock
     ld sp, 8(a1)
     ret
 
