@@ -1,15 +1,13 @@
 use super::TaskContext;
-use super::TaskContext;
 use crate::config::{kernel_stack_position, MAX_SYSCALL_NUM, TRAP_CONTEXT};
 use crate::mm::{MapPermission, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::trap::{trap_handler, TrapContext};
 
-#[derive(Clone, Copy)]
 pub struct TaskControlBlock {
     pub task_status: TaskStatus,
     pub task_cx: TaskContext,
 
-    // lab1
+    // os3
     pub syscall_times: [u32; MAX_SYSCALL_NUM], // solve way: use vec
     pub first_run: bool,
     pub begin_time: usize,
@@ -26,10 +24,6 @@ pub struct TaskControlBlock {
 
 impl TaskControlBlock {
     pub fn trap_cx(&self) -> &'static mut TrapContext {
-        // 返回 'static 的可变引用和之前一样可以看成一个绕过 unsafe 的裸指针；
-        // 而 PhysPageNum::get_mut 是一个泛型函数，由于我们已经声明了总体返回 TrapContext 的可变引用，
-        // 则Rust编译器会给 get_mut 泛型函数针对具体类型 TrapContext 的情况生成一个特定版本的 get_mut 函数实现。
-        // 在 trap_cx 函数中则会静态调用 get_mut 泛型函数的特定版本实现。
         self.trap_cx_ppn.get_mut()
     }
 
@@ -50,7 +44,6 @@ impl TaskControlBlock {
 
         let task_status = TaskStatus::Ready;
 
-        // map a kernel stack in kernel space
         // 根据传入的应用 ID app_id 调用在 config 子模块中定义的 kernel_stack_position 找到 应用的内核栈预计放在内核地址空间 KERNEL_SPACE 中的哪个位置，
         // 并通过 insert_framed_area 实际将这个逻辑段 加入到内核地址空间中
         let (kernel_stack_bottom, kernel_stack_top) = kernel_stack_position(app_id);
@@ -63,6 +56,11 @@ impl TaskControlBlock {
         let task_control_block = Self {
             task_status,
             // 在应用的内核栈顶压入一个跳转到 trap_return 而不是 __restore 的任务上下文，这主要是为了能够支持对该应用的启动并顺利切换到用户地址空间执行。
+            // 接着调用 `TaskContext::goto_trap_resturn` 来构造每个任务保存在任务控制块中的任务上下文：
+            // 它设置任务上下文中的内核栈指针将任务上下文的 `ra` 设置为 `trap_return` 的入口地址,
+            // 这样，在 `__switch` 从它上面恢复并返回之后就会直接跳转到 `trap_return` ，设置 stvec 为 trap_handler 的入口地址，
+            // 并前往 __restore 更新 sscratch 的值为 TrapContext (位于应用地址空间)
+            // 此时栈顶是一个构造出来第一次进入用户态执行的 Trap 上下文 (返回用户态)
             task_cx: TaskContext::goto_trap_return(kernel_stack_top),
 
             syscall_times: [0; MAX_SYSCALL_NUM],
@@ -88,7 +86,7 @@ impl TaskControlBlock {
             user_sp,
             KERNEL_SPACE.lock().token(),
             kernel_stack_top,
-            tarp_handler as usize,
+            trap_handler as usize,
         );
 
         task_control_block
@@ -97,7 +95,7 @@ impl TaskControlBlock {
 
 #[derive(Copy, Clone, PartialEq)]
 pub enum TaskStatus {
-    UnInit,
+    // UnInit, // unsued
     Ready,
     Running,
     Exited,

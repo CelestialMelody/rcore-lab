@@ -3,8 +3,7 @@
 use std::fs::{read_dir, File};
 use std::io::{Result, Write};
 
-// static TARGET_PATH: &str = "../user/target/riscv64gc-unknown-none-elf/release/";
-static TARGET_PATH: &str = "../user/build/bin/";
+static TARGET_PATH: &str = "../user/build/elf/";
 
 fn main() {
     println!("cargo:rerun-if-changed=../user/src/");
@@ -12,9 +11,11 @@ fn main() {
     insert_app_data().unwrap();
 }
 
+// 创建 link_app.S 文件
 fn insert_app_data() -> Result<()> {
     let mut file = File::create("src/link_app.S")?;
 
+    // 获取 elf 文件名并排序
     let mut apps: Vec<_> = read_dir(TARGET_PATH)?
         .into_iter()
         .map(|dir_entry| {
@@ -53,11 +54,11 @@ _num_apps:
     )?;
 
     // 应用构建器 os/build.rs 的改动：
-    // - 首先，我们在 .incbin 中不再插入清除全部符号的应用二进制镜像 *.bin ，而是将应用的 ELF 执行文件直接链接进来；
-    // - 其次，在链接每个 ELF 执行文件之前我们都加入一行 .align 3 来确保它们对齐到 8 字节，这是由于如果不这样做，
-    //  xmas-elf crate 可能会在解析 ELF 的时候进行不对齐的内存读写，
-    //  例如使用 ld 指令从内存的一个没有对齐到 8 字节的地址加载一个 64 位的值到一个通用寄存器。
-    //  而在 k210 平台上，由于其硬件限制，这种情况会触发一个内存读写不对齐的异常，导致解析无法正常完成。
+    // 首先，在 .incbin 中不再插入清除全部符号的应用二进制镜像 *.bin ，而是将应用的 ELF 执行文件直接链接进来；
+    // 其次，在链接每个 ELF 执行文件之前我们都加入一行 .align 3 来确保它们对齐到 8 字节，这是由于如果不这样做，
+    // xmas-elf crate 可能会在解析 ELF 的时候进行不对齐的内存读写，
+    // 例如使用 ld 指令从内存的一个没有对齐到 8 字节的地址加载一个 64 位的值到一个通用寄存器。
+    // 而在 k210 平台上，由于其硬件限制，这种情况会触发一个内存读写不对齐的异常，导致解析无法正常完成。
     for (idx, app) in apps.iter().enumerate() {
         println!("app_{}: {}", idx, app);
         writeln!(

@@ -9,6 +9,9 @@ mod console;
 #[macro_use]
 extern crate log;
 
+#[macro_use]
+extern crate bitflags;
+
 // `alloc` with `#![no_std]` support, see [`link`](https://doc.rust-lang.org/edition-guide/rust-2018/path-changes.html#an-exception-for-extern-crate)
 extern crate alloc;
 
@@ -82,8 +85,12 @@ fn rust_main() -> ! {
     );
     error!("[kernel] .bss [{:#x}, {:#x})", sbss as usize, ebss as usize);
 
+    mm::init();
+    println!("[kernel] back to world!");
+    mm::remap_test();
+
     trap::init();
-    loader::load_apps();
+    // loader::load_apps();
 
     // 为了避免 S 特权级时钟中断被屏蔽，需要在内核态下开启时钟中断
     // 设置了 sie.stie 使得 S 特权级时钟中断不会被屏蔽

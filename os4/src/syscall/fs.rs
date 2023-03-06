@@ -21,6 +21,7 @@ pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
                 let s = core::str::from_utf8(buf).unwrap();
                 print!("{}", s);
             }
+            len as isize
         }
         _ => panic!("Unknown fd: {} in sys_write!", fd),
     }

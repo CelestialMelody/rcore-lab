@@ -22,7 +22,7 @@ use page_table::{PTEFlags, PageTable};
 
 /// initiate heap allocator, frame allocator and kernel space
 pub fn init() {
-    // 最先进行了全局动态内存分配器的初始化，因为接下来马上就要用到 Rust 的堆数据结构
+    // 先进行全局动态内存分配器的初始化，因为接下来马上就要用到 Rust 的堆数据结构
     heap_allocator::init_heap();
 
     // 初始化物理页帧管理器（内含堆数据结构 Vec<T> ）使能可用物理页帧的分配和回收能力。

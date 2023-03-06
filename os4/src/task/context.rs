@@ -18,6 +18,7 @@ impl TaskContext {
     }
 
     /// os3 用于创建新的任务, 传入任务的入口地址
+    #[allow(unused)]
     pub fn goto_restore(kstack_ptr: usize) -> Self {
         extern "C" {
             fn __restore(); // no need pass any argument
@@ -25,7 +26,6 @@ impl TaskContext {
         Self {
             ra: __restore as usize, // ra = __restore
             sp: kstack_ptr,
-            // UNKNOWN: why 0?
             // 内核态第一次进入用户态执行用户态
             // 此时 __switch 加载的 TaskContext 是由 TaskContext::goto_restore 生成的，
             // 可以看到里面的 s0-s11 均为 0，也就是并不带有任何信息，只是起到一个占位作用,

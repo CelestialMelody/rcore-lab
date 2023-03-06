@@ -1,3 +1,14 @@
+//! Task management implementation
+//!
+//! Everything about task management, like starting and switching tasks is
+//! implemented here.
+//!
+//! A single global instance of [`TaskManager`] called `TASK_MANAGER` controls
+//! all the tasks in the operating system.
+//!
+//! Be careful when you see [`__switch`]. Control flow around this function
+//! might not be what you expect.
+
 mod context;
 mod switch;
 
@@ -8,11 +19,10 @@ use crate::config::{MAX_APP_NUM, MAX_SYSCALL_NUM};
 use crate::loader::{get_app_data, get_num_apps};
 use crate::sync::UnSafeCell;
 use crate::timer::get_time_micro;
-
+use crate::trap::TrapContext;
 use alloc::vec::Vec;
-use lazy_static::*;
-
 pub use context::TaskContext;
+use lazy_static::*;
 pub use switch::__switch;
 pub use task::{TaskControlBlock, TaskStatus};
 
@@ -24,8 +34,7 @@ pub struct TaskManager {
 }
 
 pub struct TaskManagerInner {
-    /// 任务控制块数组
-    // pub tasks: [TaskControlBlock; MAX_APP_NUM],
+    /// 任务列表
     pub tasks: Vec<TaskControlBlock>,
     /// 用于记录当前正在运行的任务id
     pub current_task: usize,
@@ -44,8 +53,9 @@ lazy_static! {
         // 在 TaskManagerInner 中我们使用向量 Vec 来保存任务控制块。
         // 在全局任务管理器 TASK_MANAGER 初始化的时候，只需使用 loader 子模块提供的 get_num_app 和 get_app_data
         // 分别获取链接到内核的应用数量和每个应用的 ELF 文件格式的数据，然后依次给每个应用创建任务控制块并加入到向量中即可。
+
         let mut tasks: Vec<TaskControlBlock> = Vec::with_capacity(MAX_APP_NUM);
-        for _ in 0..num_apps {
+        for i in 0..num_apps {
             tasks.push(TaskControlBlock::new(get_app_data(i), i));
         }
 
@@ -62,12 +72,11 @@ lazy_static! {
 }
 
 impl TaskManager {
-    /// 类似构造 Trap 上下文的方法，内核需要在应用的任务控制块上构造一个用于第一次执行的任务上下文；
-    /// 对于每个任务，我们先调用 `init_app_cx` 构造该任务的 Trap 上下文（包括应用入口地址和用户栈指针）并将其压入到内核栈顶；
-    /// 接着调用 `TaskContext::goto_restore` 来构造每个任务保存在任务控制块中的任务上下文：
-    /// 它设置任务上下文中的内核栈指针将任务上下文的 `ra` 寄存器设置为 `__restore` 的入口地址,
-    /// 这样，在 `__switch` 从它上面恢复并返回之后就会直接跳转到 `__restore` ，
-    /// 此时栈顶是一个我们构造出来第一次进入用户态执行的 Trap 上下文，就和第二章的情况一样了。
+    /// Run the first task in task list.
+    ///
+    /// Generally, the first task in task list is an idle task (we call it zero process later).
+    /// But in ch4, we load apps statically, so the first task is a real app.
+    ///
     fn run_first_task(&self) -> ! {
         // get the first task
         let mut inner = self.inner.exclusive_access();
@@ -92,9 +101,11 @@ impl TaskManager {
         let mut _unused_cx = TaskContext::init();
 
         unsafe {
+            debug!("run_first_task: __switch");
             __switch(&mut _unused_cx as *mut TaskContext, next_task_cx_ptr);
+            debug!("run_first_task: __switch end");
         }
-
+        // 通过 __swtich 设置了 sp, ra 寄存器的值 sp(kernel_stack),ra(tarp_return), switch 结束之后就会跳转到 __restore(trap_return -> 'jr __restore')
         panic!("unreachable in run_first_task");
     }
 

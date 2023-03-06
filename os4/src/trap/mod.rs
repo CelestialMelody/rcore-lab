@@ -5,6 +5,7 @@ use crate::syscall::syscall;
 use crate::task::{
     current_trap_cx, current_user_token, exit_current_and_run_next, suspend_current_and_run_next,
 };
+use crate::timer::set_next_trigger;
 
 use riscv::register::{
     mtvec::TrapMode,
@@ -150,7 +151,7 @@ pub fn trap_return() -> ! {
     // 由于 __alltraps 是对齐到地址空间跳板页面的起始地址 TRAMPOLINE 上的，
     // 则 __restore 的虚拟地址只需在 TRAMPOLINE 基础上加上 __restore 相对于 __alltraps 的偏移量即可。
     // 这里 __alltraps 和 __restore 都是指编译器在链接时看到的内核内存布局中的地址。
-    let restore_va = __restore as usize - __alltraps as usize + TRAMPOLINE;
+    let restore_va = __restore as usize - __alltraps as usize + TRAMPOLINE; // __restore 的虚拟地址
 
     unsafe {
         // https://doc.rust-lang.org/nightly/reference/inline-assembly.html
@@ -161,11 +162,11 @@ pub fn trap_return() -> ! {
         // 因此我们直接将整个 i-cache 清空避免错误。
         // 接着使用 jr 指令完成了跳转到 __restore 的任务。
         core::arch::asm!(
-            "fence.i",
-            "jr {restore_va}",
-            restore_va = in(reg) restore_va,
-            in("a0") trap_cx_ptr,
-            in("a1") user_satp,
+            "fence.i", // clear i-cache
+            "jr {restore_va}", // jump to __restore asm code
+            restore_va = in(reg) restore_va, // __restore virtual addr
+            in("a0") trap_cx_ptr, // a0 =virt addr of Trap Context
+            in("a1") user_satp, // a1 = phy addr of usr page table
             options(noreturn)
         );
     }

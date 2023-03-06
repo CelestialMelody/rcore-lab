@@ -26,7 +26,6 @@ pub fn sys_exit(exit_code: i32) -> ! {
     panic!("Unreachable in sys_exit!");
 }
 
-/// 用于切换到下一个任务
 /// current task give up cpu or resouce
 pub fn sys_yield() -> isize {
     suspend_current_and_run_next();
@@ -34,26 +33,41 @@ pub fn sys_yield() -> isize {
 }
 
 /// 获取当前时间戳
-/// ts 为 TimeVal 类型的指针，用于保存时间戳
-/// _tz 为时区，目前不使用
-pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
-    let time = get_time_micro();
-
-    unsafe {
-        *ts = TimeVal {
-            sec: time / 1_000_000, // us -> second
-            usec: time % 1_000_000,
-        };
-    }
+/// ts 为 TimeVal 类型的指针，用于保存时间戳；
+/// _tz 为时区
+// YOUR JOB: 引入虚地址后重写 sys_get_time
+pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
+    let _us = get_time_micro();
+    // unsafe {
+    //     *ts = TimeVal {
+    //         sec: us / 1_000_000,
+    //         usec: us % 1_000_000,
+    //     };
+    // }
     0
 }
 
+pub fn sys_set_priority(_prio: isize) -> isize {
+    -1
+}
+
+// YOUR JOB: 扩展内核以实现 sys_mmap 和 sys_munmap
+pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
+    -1
+}
+
+pub fn sys_munmap(_start: usize, _len: usize) -> isize {
+    -1
+}
+
 /// 获取当前任务的信息
-pub fn sys_task_info(task_info: *mut TaskInfo) -> isize {
-    unsafe {
-        (*task_info).status = get_curr_task_status();
-        (*task_info).syscall_times = get_curr_task_syscall_times();
-        (*task_info).time = get_curr_task_running_time() / 1000;
-    }
-    0
+// YOUR JOB: 引入虚地址后重写 sys_task_info
+pub fn sys_task_info(ti: *mut TaskInfo) -> isize {
+    -1
+    // unsafe {
+    //     (*task_info).status = get_curr_task_status();
+    //     (*task_info).syscall_times = get_curr_task_syscall_times();
+    //     (*task_info).time = get_curr_task_running_time() / 1000;
+    // }
+    // 0
 }

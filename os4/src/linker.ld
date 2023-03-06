@@ -21,12 +21,12 @@ SECTIONS
     也可以使用通配符来书写 <ObjectFile> 和 <SectionName> 分别表示可能的输入目标文件和段名。
 */
 
-/* strampoline: 跳板 */
     stext = .;
     .text : {
         *(.text.entry)
         . = ALIGN(4K);
         /* 将 trap.S 中的整段汇编代码放置在 .text.trampoline 段(see trap.S 的 .section 段)，并在调整内存布局的时候将它对齐到代码段的一个页面中 */
+        /* strampoline: 跳板开始 */
         strampoline = .;
         *(.text.trampoline);
         . = ALIGN(4K);

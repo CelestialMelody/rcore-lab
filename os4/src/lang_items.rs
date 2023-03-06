@@ -1,7 +1,8 @@
 use crate::sbi::shutdown;
 use core::panic::PanicInfo;
 
-#[panic_handler] // 当遇到不可恢复错误的时候，被标记为语义项 #[panic_handler] 的 panic 函数将会被调用
+#[panic_handler]
+// 运行时当遇到不可恢复错误的时候，被标记为语义项 #[panic_handler] 的 panic 函数将会被调用
 fn panic(info: &PanicInfo) -> ! {
     if let Some(location) = info.location() {
         println!(
