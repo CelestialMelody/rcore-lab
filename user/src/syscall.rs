@@ -1,63 +1,156 @@
-#![allow(unused)]
-pub const SYSCALL_READ: usize = 63;
-pub const SYSCALL_WRITE: usize = 64;
-pub const SYSCALL_EXIT: usize = 93;
-pub const SYSCALL_YIELD: usize = 124;
-pub const SYSCALL_GET_TIME: usize = 169;
-pub const SYSCALL_TASK_INFO: usize = 410;
-
-use super::TimeVal;
 use crate::TaskInfo;
 
-/// 所有的系统调用都封装成 syscall 函数，支持传入 syscall ID 和 3 个参数
+use super::{Stat, TimeVal};
+
+pub const SYSCALL_OPENAT: usize = 56;
+pub const SYSCALL_CLOSE: usize = 57;
+pub const SYSCALL_READ: usize = 63;
+pub const SYSCALL_WRITE: usize = 64;
+pub const SYSCALL_UNLINKAT: usize = 35;
+pub const SYSCALL_LINKAT: usize = 37;
+pub const SYSCALL_FSTAT: usize = 80;
+pub const SYSCALL_EXIT: usize = 93;
+pub const SYSCALL_SLEEP: usize = 101;
+pub const SYSCALL_YIELD: usize = 124;
+
+// pub const SYSCALL_GETTIMEOFDAY: usize = 169;
+pub const SYSCALL_GET_TIME: usize = 169;
+
+pub const SYSCALL_GETPID: usize = 172;
+pub const SYSCALL_GETTID: usize = 178;
+pub const SYSCALL_FORK: usize = 220;
+pub const SYSCALL_EXEC: usize = 221;
+pub const SYSCALL_WAITPID: usize = 260;
+pub const SYSCALL_SET_PRIORITY: usize = 140;
+pub const SYSCALL_MUNMAP: usize = 215;
+pub const SYSCALL_MMAP: usize = 222;
+pub const SYSCALL_SPAWN: usize = 400;
+pub const SYSCALL_MAIL_READ: usize = 401;
+pub const SYSCALL_MAIL_WRITE: usize = 402;
+pub const SYSCALL_DUP: usize = 24;
+pub const SYSCALL_PIPE: usize = 59;
+pub const SYSCALL_TASK_INFO: usize = 410;
+pub const SYSCALL_THREAD_CREATE: usize = 460;
+pub const SYSCALL_WAITTID: usize = 462;
+pub const SYSCALL_MUTEX_CREATE: usize = 463;
+pub const SYSCALL_MUTEX_LOCK: usize = 464;
+pub const SYSCALL_MUTEX_UNLOCK: usize = 466;
+pub const SYSCALL_SEMAPHORE_CREATE: usize = 467;
+pub const SYSCALL_SEMAPHORE_UP: usize = 468;
+pub const SYSCALL_ENABLE_DEADLOCK_DETECT: usize = 469;
+pub const SYSCALL_SEMAPHORE_DOWN: usize = 470;
+pub const SYSCALL_CONDVAR_CREATE: usize = 471;
+pub const SYSCALL_CONDVAR_SIGNAL: usize = 472;
+pub const SYSCALL_CONDVAR_WAIT: usize = 473;
+
 pub fn syscall(id: usize, args: [usize; 3]) -> isize {
     let mut ret: isize;
     unsafe {
-        // 相比 global_asm! ， asm! 宏可以获取上下文中的变量信息并允许嵌入的汇编代码对这些变量进行操作
-        core::arch::asm!( // asm! 宏可以将汇编代码嵌入到局部的函数上下文中
-            "ecall", // `ecall` 指令触发 Trap
-            // a0 寄存器，它同时作为输入和输出，
-            // 因此我们将 in 改成 inlateout ，并在行末的变量部分使用 {in_var} => {out_var} 的格式，
-            // 其中 {in_var} 和 {out_var} 分别表示上下文中的输入变量和输出变量
-            inlateout ("x10") args[0] => ret, // `a0` 保存系统调用的返回值
-            // 输入参数 args[1] 绑定到 ecall 的输入寄存器 x11 即 a1 中，
-            // 编译器自动插入相关指令并保证在 ecall 指令被执行之前寄存器 a1 的值与 args[1] 相同
-            in ("x11") args[1], //  `a0~a6` 保存系统调用的参数
-            in ("x12") args[2],
-            in ("x17") id, // `a7` 用来传递 syscall ID
+        core::arch::asm!(
+            "ecall",
+            inlateout("x10") args[0] => ret,
+            in("x11") args[1],
+            in("x12") args[2],
+            in("x17") id
         );
     }
     ret
 }
 
-/// 功能：将内存中缓冲区中的数据写入文件。
-/// 参数：`fd` 表示待写入文件的文件描述符；
-///      `buf` 表示内存中缓冲区的地址段；
-/// 返回值：返回成功写入的长度。
-/// syscall ID：64
-pub fn sys_write(fd: usize, buf: &[u8]) -> isize {
-    // sys_write 使用一个 &[u8] 切片类型来描述缓冲区，
-    // 这是一个 胖指针 (Fat Pointer)，里面既包含缓冲区的起始地址，还包含缓冲区的长度
-    // 可以分别通过 as_ptr 和 len 方法取出它们并独立地作为实际的系统调用参数
-    syscall(SYSCALL_WRITE, [fd, buf.as_ptr() as usize, buf.len()])
+pub fn syscall6(id: usize, args: [usize; 6]) -> isize {
+    let mut ret: isize;
+    unsafe {
+        core::arch::asm!("ecall",
+            inlateout("x10") args[0] => ret,
+            in("x11") args[1],
+            in("x12") args[2],
+            in("x13") args[3],
+            in("x14") args[4],
+            in("x15") args[5],
+            in("x17") id
+        );
+    }
+    ret
 }
 
-/// 功能：从文件中读取数据到内存缓冲区。
-/// 参数：`fd` 表示待读取文件的文件描述符；
-///     `buf` 表示内存中缓冲区的地址段；
-/// 返回值：返回成功读取的长度。
-/// syscall ID：63
-pub fn sys_read(fd: usize, buf: &mut [u8]) -> isize {
-    syscall(SYSCALL_READ, [fd, buf.as_mut_ptr() as usize, buf.len()])
+pub fn sys_openat(dirfd: usize, path: &str, flags: u32, mode: u32) -> isize {
+    syscall6(
+        SYSCALL_OPENAT,
+        [
+            dirfd,
+            path.as_ptr() as usize,
+            flags as usize,
+            mode as usize,
+            0,
+            0,
+        ],
+    )
 }
 
-/// 功能：退出应用程序并将返回值告知批处理系统。
-/// 参数：`xstate` 表示应用程序的返回值。
-/// 返回值：该系统调用不应该返回。
-/// syscall ID：93
-pub fn sys_exit(xstate: i32) -> ! {
-    syscall(SYSCALL_EXIT, [xstate as usize, 0, 0]);
-    panic!("sys_exit never returns");
+pub fn sys_close(fd: usize) -> isize {
+    syscall(SYSCALL_CLOSE, [fd, 0, 0])
+}
+
+pub fn sys_read(fd: usize, buffer: &mut [u8]) -> isize {
+    syscall(
+        SYSCALL_READ,
+        [fd, buffer.as_mut_ptr() as usize, buffer.len()],
+    )
+}
+
+pub fn sys_write(fd: usize, buffer: &[u8]) -> isize {
+    syscall(SYSCALL_WRITE, [fd, buffer.as_ptr() as usize, buffer.len()])
+}
+
+pub fn sys_linkat(
+    old_dirfd: usize,
+    old_path: &str,
+    new_dirfd: usize,
+    new_path: &str,
+    flags: usize,
+) -> isize {
+    syscall6(
+        SYSCALL_LINKAT,
+        [
+            old_dirfd,
+            old_path.as_ptr() as usize,
+            new_dirfd,
+            new_path.as_ptr() as usize,
+            flags,
+            0,
+        ],
+    )
+}
+
+pub fn sys_unlinkat(dirfd: usize, path: &str, flags: usize) -> isize {
+    syscall(SYSCALL_UNLINKAT, [dirfd, path.as_ptr() as usize, flags])
+}
+
+pub fn sys_fstat(fd: usize, st: &Stat) -> isize {
+    syscall(SYSCALL_FSTAT, [fd, st as *const _ as usize, 0])
+}
+
+pub fn sys_mail_read(buffer: &mut [u8]) -> isize {
+    syscall(
+        SYSCALL_MAIL_READ,
+        [buffer.as_ptr() as usize, buffer.len(), 0],
+    )
+}
+
+pub fn sys_mail_write(pid: usize, buffer: &[u8]) -> isize {
+    syscall(
+        SYSCALL_MAIL_WRITE,
+        [pid, buffer.as_ptr() as usize, buffer.len()],
+    )
+}
+
+pub fn sys_exit(exit_code: i32) -> ! {
+    syscall(SYSCALL_EXIT, [exit_code as usize, 0, 0]);
+    panic!("sys_exit never returns!");
+}
+
+pub fn sys_sleep(sleep_ms: usize) -> isize {
+    syscall(SYSCALL_SLEEP, [sleep_ms, 0, 0])
 }
 
 pub fn sys_yield() -> isize {
@@ -68,6 +161,101 @@ pub fn sys_get_time(time: &TimeVal, tz: usize) -> isize {
     syscall(SYSCALL_GET_TIME, [time as *const _ as usize, tz, 0])
 }
 
+pub fn sys_getpid() -> isize {
+    syscall(SYSCALL_GETPID, [0, 0, 0])
+}
+
+pub fn sys_fork() -> isize {
+    syscall(SYSCALL_FORK, [0, 0, 0])
+}
+
+pub fn sys_exec(path: &str, args: &[*const u8]) -> isize {
+    syscall(
+        SYSCALL_EXEC,
+        [path.as_ptr() as usize, args.as_ptr() as usize, 0],
+    )
+}
+
+pub fn sys_waitpid(pid: isize, xstatus: *mut i32) -> isize {
+    syscall(SYSCALL_WAITPID, [pid as usize, xstatus as usize, 0])
+}
+
+pub fn sys_set_priority(prio: isize) -> isize {
+    syscall(SYSCALL_SET_PRIORITY, [prio as usize, 0, 0])
+}
+
+pub fn sys_mmap(start: usize, len: usize, prot: usize) -> isize {
+    syscall(SYSCALL_MMAP, [start, len, prot])
+}
+
+pub fn sys_munmap(start: usize, len: usize) -> isize {
+    syscall(SYSCALL_MUNMAP, [start, len, 0])
+}
+
+pub fn sys_spawn(path: &str) -> isize {
+    syscall(SYSCALL_SPAWN, [path.as_ptr() as usize, 0, 0])
+}
+
+pub fn sys_dup(fd: usize) -> isize {
+    syscall(SYSCALL_DUP, [fd, 0, 0])
+}
+
+pub fn sys_pipe(pipe: &mut [usize]) -> isize {
+    syscall(SYSCALL_PIPE, [pipe.as_mut_ptr() as usize, 0, 0])
+}
+
 pub fn sys_task_info(info: &TaskInfo) -> isize {
     syscall(SYSCALL_TASK_INFO, [info as *const _ as usize, 0, 0])
+}
+
+pub fn sys_thread_create(entry: usize, arg: usize) -> isize {
+    syscall(SYSCALL_THREAD_CREATE, [entry, arg, 0])
+}
+
+pub fn sys_gettid() -> isize {
+    syscall(SYSCALL_GETTID, [0; 3])
+}
+
+pub fn sys_waittid(tid: usize) -> isize {
+    syscall(SYSCALL_WAITTID, [tid, 0, 0])
+}
+
+pub fn sys_mutex_create(blocking: bool) -> isize {
+    syscall(SYSCALL_MUTEX_CREATE, [blocking as usize, 0, 0])
+}
+
+pub fn sys_mutex_lock(id: usize) -> isize {
+    syscall(SYSCALL_MUTEX_LOCK, [id, 0, 0])
+}
+
+pub fn sys_mutex_unlock(id: usize) -> isize {
+    syscall(SYSCALL_MUTEX_UNLOCK, [id, 0, 0])
+}
+
+pub fn sys_semaphore_create(res_count: usize) -> isize {
+    syscall(SYSCALL_SEMAPHORE_CREATE, [res_count, 0, 0])
+}
+
+pub fn sys_semaphore_up(sem_id: usize) -> isize {
+    syscall(SYSCALL_SEMAPHORE_UP, [sem_id, 0, 0])
+}
+
+pub fn sys_enable_deadlock_detect(enabled: usize) -> isize {
+    syscall(SYSCALL_ENABLE_DEADLOCK_DETECT, [enabled, 0, 0])
+}
+
+pub fn sys_semaphore_down(sem_id: usize) -> isize {
+    syscall(SYSCALL_SEMAPHORE_DOWN, [sem_id, 0, 0])
+}
+
+pub fn sys_condvar_create(_arg: usize) -> isize {
+    syscall(SYSCALL_CONDVAR_CREATE, [_arg, 0, 0])
+}
+
+pub fn sys_condvar_signal(condvar_id: usize) -> isize {
+    syscall(SYSCALL_CONDVAR_SIGNAL, [condvar_id, 0, 0])
+}
+
+pub fn sys_condvar_wait(condvar_id: usize, mutex_id: usize) -> isize {
+    syscall(SYSCALL_CONDVAR_WAIT, [condvar_id, mutex_id, 0])
 }

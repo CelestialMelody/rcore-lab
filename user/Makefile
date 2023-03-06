@@ -6,7 +6,7 @@ PY := python3
 BUILD_DIR := build
 
 BASE ?= 1
-CHAPTER ?= 3
+CHAPTER ?= 4
 # TEST ?= $(CHAPTER)
 
 APP_DIR := src/bin

@@ -8,11 +8,83 @@ pub mod console;
 mod lang_items;
 mod syscall;
 
-/// `alloc` with `#![no_std]` support, see [`link`](https://doc.rust-lang.org/edition-guide/rust-2018/path-changes.html#an-exception-for-extern-crate)
-// extern crate alloc;
+extern crate alloc;
+extern crate core;
+#[macro_use]
+extern crate bitflags;
+
+use alloc::vec::Vec;
+use buddy_system_allocator::LockedHeap;
+pub use console::{flush, STDIN, STDOUT};
 pub use syscall::*;
 
-const MAX_SYSCALL_NUM: usize = 500;
+const USER_HEAP_SIZE: usize = 16384;
+
+static mut HEAP_SPACE: [u8; USER_HEAP_SIZE] = [0; USER_HEAP_SIZE];
+
+#[global_allocator]
+static HEAP: LockedHeap = LockedHeap::empty();
+
+#[alloc_error_handler]
+pub fn handle_alloc_error(layout: core::alloc::Layout) -> ! {
+    panic!("Heap allocation error, layout = {:?}", layout);
+}
+
+fn clear_bss() {
+    extern "C" {
+        fn start_bss();
+        fn end_bss();
+    }
+    unsafe {
+        core::slice::from_raw_parts_mut(
+            start_bss as usize as *mut u8,
+            end_bss as usize - start_bss as usize,
+        )
+        .fill(0);
+    }
+}
+
+#[no_mangle]
+#[link_section = ".text.entry"]
+pub extern "C" fn _start(argc: usize, argv: usize) -> ! {
+    clear_bss();
+    unsafe {
+        HEAP.lock()
+            .init(HEAP_SPACE.as_ptr() as usize, USER_HEAP_SIZE);
+    }
+    let mut v: Vec<&'static str> = Vec::new();
+    for i in 0..argc {
+        let str_start =
+            unsafe { ((argv + i * core::mem::size_of::<usize>()) as *const usize).read_volatile() };
+        let len = (0usize..)
+            .find(|i| unsafe { ((str_start + *i) as *const u8).read_volatile() == 0 })
+            .unwrap();
+        v.push(
+            core::str::from_utf8(unsafe {
+                core::slice::from_raw_parts(str_start as *const u8, len)
+            })
+            .unwrap(),
+        );
+    }
+    exit(main(argc, v.as_slice()));
+}
+
+#[linkage = "weak"]
+#[no_mangle]
+fn main(_argc: usize, _argv: &[&str]) -> i32 {
+    panic!("Cannot find main!");
+}
+
+bitflags! {
+    pub struct OpenFlags: u32 {
+        const RDONLY = 0;
+        const WRONLY = 1 << 0;
+        const RDWR = 1 << 1;
+        const CREATE = 1 << 9;
+        const TRUNC = 1 << 10;
+    }
+}
+
 #[repr(C)]
 #[derive(Debug, Default)]
 pub struct TimeVal {
@@ -34,6 +106,14 @@ pub enum TaskStatus {
     Exited,
 }
 
+#[derive(Copy, Clone, Debug)]
+pub struct SyscallInfo {
+    pub id: usize,
+    pub times: usize,
+}
+
+const MAX_SYSCALL_NUM: usize = 500;
+
 #[derive(Debug)]
 pub struct TaskInfo {
     pub status: TaskStatus,
@@ -51,63 +131,60 @@ impl TaskInfo {
     }
 }
 
-#[alloc_error_handler]
-pub fn handle_alloc_error(layout: core::alloc::Layout) -> ! {
-    panic!("Heap allocation error, layout = {:?}", layout);
+#[repr(C)]
+#[derive(Debug)]
+pub struct Stat {
+    /// ID of device containing file
+    pub dev: u64,
+    /// inode number
+    pub ino: u64,
+    /// file type and mode
+    pub mode: StatMode,
+    /// number of hard links
+    pub nlink: u32,
+    /// unused pad
+    pad: [u64; 7],
 }
 
-fn clear_bss() {
-    extern "C" {
-        fn start_bss();
-        fn end_bss();
-    }
-    unsafe {
-        core::slice::from_raw_parts_mut(
-            // from_raw_parts_mut() returns a mutable slice of memory
-            start_bss as usize as *mut u8,
-            end_bss as usize - start_bss as usize,
-        )
-        .fill(0);
-    }
-}
-
-#[no_mangle]
-// 使用 Rust 的宏将 _start 这段代码编译后的汇编代码中放在一个名为 .text.entry 的代码段中
-// 方便在后续链接的时候调整它的位置使得它能够作为用户库的入口
-#[link_section = ".text.entry"] // .text.entry is a section name
-pub extern "C" fn _start() -> ! {
-    // 手动清空需要零初始化的 .bss 段
-    // 很遗憾到目前为止底层的批处理系统还没有这个能力，所以我们只能在用户库中完成
-    clear_bss();
-    // 然后调用 main 函数得到一个类型为 i32 的返回值
-    // 最后调用用户库提供的 exit 接口退出应用程序，并将 main 函数的返回值告知批处理系统
-    exit(main());
-    // panic!("unreachable after sys_exit!");
-}
-
-// 使用 Rust 的宏将其函数符号 main 标志为弱链接
-// 这样在最后链接的时候，虽然在 lib.rs 和 bin 目录下的某个应用程序都有 main 符号，
-// 但由于 lib.rs 中的 main 符号是弱链接，链接器会使用 bin 目录下的应用主逻辑作为 main
-// 这里我们主要是进行某种程度上的保护，如果在 bin 目录下找不到任何 main ，那么编译也能够通过，但会在运行时报错
-// UNKWON: 用户库的main返回值并非是符合exits参数的
-// 1. 用户的main与这里的main有什么关系吗？
-// 2. 用户的main退出时与这里的exit有什么关系吗？
-// 猜测这里是因为 `extern "C" `的原因：c abi 的话可能只会检查函数名，并没有严格检查参数与返回值类型。
-#[linkage = "weak"] // -> add #![feature(linkage)]
-#[no_mangle]
-fn main() -> i32 {
-    panic!("main() not defined in apps!");
-}
-
-pub fn sleep(period_ms: usize) {
-    let start = get_time();
-    while get_time() < start + period_ms as isize {
-        sys_yield();
+impl Stat {
+    pub fn new() -> Self {
+        Stat {
+            dev: 0,
+            ino: 0,
+            mode: StatMode::NULL,
+            nlink: 0,
+            pad: [0; 7],
+        }
     }
 }
 
-pub fn exit(code: i32) -> ! {
-    sys_exit(code);
+impl Default for Stat {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+bitflags! {
+    pub struct StatMode: u32 {
+        const NULL  = 0;
+        /// directory
+        const DIR   = 0o040000;
+        /// ordinary regular file
+        const FILE  = 0o100000;
+    }
+}
+
+const AT_FDCWD: isize = -100;
+
+pub fn open(path: &str, flags: OpenFlags) -> isize {
+    sys_openat(AT_FDCWD as usize, path, flags.bits, OpenFlags::RDWR.bits)
+}
+
+pub fn close(fd: usize) -> isize {
+    if fd == STDOUT {
+        console::flush();
+    }
+    sys_close(fd)
 }
 
 pub fn read(fd: usize, buf: &mut [u8]) -> isize {
@@ -118,6 +195,31 @@ pub fn write(fd: usize, buf: &[u8]) -> isize {
     sys_write(fd, buf)
 }
 
+pub fn link(old_path: &str, new_path: &str) -> isize {
+    sys_linkat(AT_FDCWD as usize, old_path, AT_FDCWD as usize, new_path, 0)
+}
+
+pub fn unlink(path: &str) -> isize {
+    sys_unlinkat(AT_FDCWD as usize, path, 0)
+}
+
+pub fn fstat(fd: usize, st: &Stat) -> isize {
+    sys_fstat(fd, st)
+}
+
+pub fn mail_read(buf: &mut [u8]) -> isize {
+    sys_mail_read(buf)
+}
+
+pub fn mail_write(pid: usize, buf: &[u8]) -> isize {
+    sys_mail_write(pid, buf)
+}
+
+pub fn exit(exit_code: i32) -> ! {
+    console::flush();
+    sys_exit(exit_code);
+}
+
 pub fn yield_() -> isize {
     sys_yield()
 }
@@ -125,12 +227,133 @@ pub fn yield_() -> isize {
 pub fn get_time() -> isize {
     let time = TimeVal::new();
     match sys_get_time(&time, 0) {
-        // return 0 when os syscall: sys_get_time success
-        0 => ((time.sec & 0xffff) * 1000 + time.usec / 1000) as isize, // sec to ms
+        0 => ((time.sec & 0xffff) * 1000 + time.usec / 1000) as isize,
         _ => -1,
     }
 }
 
+pub fn getpid() -> isize {
+    sys_getpid()
+}
+
+pub fn fork() -> isize {
+    sys_fork()
+}
+
+pub fn exec(path: &str, args: &[*const u8]) -> isize {
+    sys_exec(path, args)
+}
+
+pub fn set_priority(prio: isize) -> isize {
+    sys_set_priority(prio)
+}
+
+pub fn wait(exit_code: &mut i32) -> isize {
+    loop {
+        match sys_waitpid(-1, exit_code as *mut _) {
+            -2 => {
+                sys_yield();
+            }
+            n => {
+                return n;
+            }
+        }
+    }
+}
+
+pub fn waitpid(pid: usize, exit_code: &mut i32) -> isize {
+    loop {
+        match sys_waitpid(pid as isize, exit_code as *mut _) {
+            -2 => {
+                sys_yield();
+            }
+            n => {
+                return n;
+            }
+        }
+    }
+}
+
+pub fn sleep_blocking(sleep_ms: usize) {
+    sys_sleep(sleep_ms);
+}
+
+pub fn sleep(period_ms: usize) {
+    let start = get_time();
+    while get_time() < start + period_ms as isize {
+        sys_yield();
+    }
+}
+pub fn mmap(start: usize, len: usize, prot: usize) -> isize {
+    sys_mmap(start, len, prot)
+}
+
+pub fn munmap(start: usize, len: usize) -> isize {
+    sys_munmap(start, len)
+}
+
+pub fn spawn(path: &str) -> isize {
+    sys_spawn(path)
+}
+
+pub fn dup(fd: usize) -> isize {
+    sys_dup(fd)
+}
+pub fn pipe(pipe_fd: &mut [usize]) -> isize {
+    sys_pipe(pipe_fd)
+}
+
 pub fn task_info(info: &TaskInfo) -> isize {
     sys_task_info(info)
+}
+
+pub fn thread_create(entry: usize, arg: usize) -> isize {
+    sys_thread_create(entry, arg)
+}
+pub fn gettid() -> isize {
+    sys_gettid()
+}
+pub fn waittid(tid: usize) -> isize {
+    loop {
+        match sys_waittid(tid) {
+            -2 => {
+                yield_();
+            }
+            exit_code => return exit_code,
+        }
+    }
+}
+
+pub fn mutex_create() -> isize {
+    sys_mutex_create(false)
+}
+pub fn mutex_blocking_create() -> isize {
+    sys_mutex_create(true)
+}
+pub fn mutex_lock(mutex_id: usize) -> isize {
+    sys_mutex_lock(mutex_id)
+}
+pub fn mutex_unlock(mutex_id: usize) {
+    sys_mutex_unlock(mutex_id);
+}
+pub fn semaphore_create(res_count: usize) -> isize {
+    sys_semaphore_create(res_count)
+}
+pub fn semaphore_up(sem_id: usize) {
+    sys_semaphore_up(sem_id);
+}
+pub fn enable_deadlock_detect(enabled: bool) -> isize {
+    sys_enable_deadlock_detect(enabled as usize)
+}
+pub fn semaphore_down(sem_id: usize) -> isize {
+    sys_semaphore_down(sem_id)
+}
+pub fn condvar_create() -> isize {
+    sys_condvar_create(0)
+}
+pub fn condvar_signal(condvar_id: usize) {
+    sys_condvar_signal(condvar_id);
+}
+pub fn condvar_wait(condvar_id: usize, mutex_id: usize) {
+    sys_condvar_wait(condvar_id, mutex_id);
 }
