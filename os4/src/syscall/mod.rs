@@ -21,9 +21,12 @@ const SYSCALL_TASK_INFO: usize = 410;
 
 mod fs;
 mod process;
+// 一个大胆的想法
+pub mod timer;
 
 use fs::*;
 use process::*;
+pub use timer::*;
 
 /// handle syscall exception with `syscall_id` and other arguments
 pub fn syscall(syscall_id: usize, args: [usize; 3]) -> isize {

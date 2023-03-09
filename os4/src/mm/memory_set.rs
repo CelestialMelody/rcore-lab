@@ -214,6 +214,19 @@ impl MemorySet {
         }
         self.areas.push(map_area);
     }
+
+    pub fn remove_framed_area(&mut self, start_va: VirtAddr, end_va: VirtAddr) {
+        self.remove(start_va, end_va);
+    }
+
+    fn remove(&mut self, start_va: VirtAddr, end_va: VirtAddr) {
+        let start_vpn = start_va.floor();
+        let end_vpn = end_va.ceil();
+        let vpn_range: VPNRange = VPNRange::new(start_vpn, end_vpn);
+        for vpn in vpn_range {
+            self.page_table.unmap(vpn);
+        }
+    }
     /// Mention that trampoline is not collected by areas.
     /// 将内核的 trampoline 代码段映射到虚拟地址 TRAMPOLINE 上.
     /// 为了实现方便并没有新增逻辑段 MemoryArea 而是直接在多级页表中插入一个从地址空间的最高虚拟页面映射到跳板汇编代码所在的物理页帧的键值对，

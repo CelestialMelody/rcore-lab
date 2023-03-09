@@ -90,7 +90,7 @@ impl TaskManager {
         // lab1
         // change task_zero before drop inner
         task_zero.begin_time = get_time_micro();
-        task_zero.first_run = false;
+        task_zero.is_first_run = false;
 
         drop(inner); // 释放 exclusive_access() 的锁
 
@@ -135,7 +135,6 @@ impl TaskManager {
         let inner = self.inner.exclusive_access();
         let curr_task_id = inner.current_task;
 
-        //fix: BUG (for sys_yield)
         (curr_task_id + 1..curr_task_id + self.num_apps + 1)
             .map(|id| id % self.num_apps) // 保证 id 一定在 [0, self.num_apps) 范围内
             .find(|&id| inner.tasks[id].task_status == TaskStatus::Ready)
@@ -158,9 +157,9 @@ impl TaskManager {
             inner.current_task = next_task_id;
 
             // lab1
-            if inner.tasks[next_task_id].first_run {
+            if inner.tasks[next_task_id].is_first_run {
                 inner.tasks[next_task_id].begin_time = get_time_micro();
-                inner.tasks[next_task_id].first_run = false;
+                inner.tasks[next_task_id].is_first_run = false;
             }
 
             // 因为一般情况下它是在函数退出之后才会被自动释放，从而 TASK_MANAGER 的 inner 字段得以回归到未被借用的状态，之后可以再借用。
@@ -214,6 +213,14 @@ impl TaskManager {
         }
     }
 
+    fn get_task_status(&self, task_id: usize) -> TaskStatus {
+        let inner = self.inner.get_ref();
+        inner.tasks[task_id].task_status
+    }
+}
+
+// lab2
+impl TaskManager {
     /// Get the current 'Running' task's token.
     fn get_current_token(&self) -> usize {
         let inner = self.inner.exclusive_access();
@@ -225,6 +232,18 @@ impl TaskManager {
     fn get_current_trap_cx(&self) -> &mut TrapContext {
         let inner = self.inner.exclusive_access();
         inner.tasks[inner.current_task].trap_cx()
+    }
+
+    fn mmap(&self, va: usize, size: usize, mark: usize) {
+        let mut inner = self.inner.exclusive_access();
+        let task_id = inner.current_task;
+        inner.tasks[task_id].mmap(va, size, mark);
+    }
+
+    fn munmap(&self, va: usize, size: usize) {
+        let mut inner = self.inner.exclusive_access();
+        let task_id = inner.current_task;
+        inner.tasks[task_id].munmap(va, size);
     }
 }
 
@@ -257,9 +276,9 @@ pub fn exit_current_and_run_next() {
     run_next_task();
 }
 
-// pub fn get_task_status(task_id: usize) -> TaskStatus {
-//     TASK_MANAGER.get_task_status(task_id)
-// }
+pub fn get_task_status(task_id: usize) -> TaskStatus {
+    TASK_MANAGER.get_task_status(task_id)
+}
 
 // lab1
 pub fn get_curr_task_status() -> TaskStatus {
@@ -278,6 +297,7 @@ pub fn get_curr_task_running_time() -> usize {
     TASK_MANAGER.get_curr_task_running_time()
 }
 
+// lab2
 // 通过 current_user_token 和 current_trap_cx 分别可以获得当前正在执行的应用的地址空间的 token 和可以在内核地址空间中修改位于该应用地址空间中的 Trap 上下文的可变引用。
 
 /// Get the current 'Running' task's token.
@@ -288,4 +308,12 @@ pub fn current_user_token() -> usize {
 /// Get the current 'Running' task's trap contexts.
 pub fn current_trap_cx() -> &'static mut TrapContext {
     TASK_MANAGER.get_current_trap_cx()
+}
+
+pub fn mmap(va: usize, size: usize, mark: usize) {
+    TASK_MANAGER.mmap(va, size, mark);
+}
+
+pub fn munmap(va: usize, size: usize) {
+    TASK_MANAGER.munmap(va, size);
 }

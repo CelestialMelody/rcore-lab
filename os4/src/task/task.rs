@@ -7,9 +7,9 @@ pub struct TaskControlBlock {
     pub task_status: TaskStatus,
     pub task_cx: TaskContext,
 
-    // os3
+    // lab1
     pub syscall_times: [u32; MAX_SYSCALL_NUM], // solve way: use vec
-    pub first_run: bool,
+    pub is_first_run: bool,
     pub begin_time: usize,
     pub end_time: usize,
 
@@ -64,7 +64,7 @@ impl TaskControlBlock {
             task_cx: TaskContext::goto_trap_return(kernel_stack_top),
 
             syscall_times: [0; MAX_SYSCALL_NUM],
-            first_run: true,
+            is_first_run: true,
             begin_time: 0,
             end_time: 0,
 
@@ -93,6 +93,45 @@ impl TaskControlBlock {
     }
 }
 
+// lab2
+impl TaskControlBlock {
+    pub fn mmap(&mut self, va: usize, size: usize, mark: usize) {
+        let va_ = VirtAddr::from(va);
+        if !va_.is_aligned() {
+            panic!("va is not aligned");
+        }
+
+        if (mark & !0x7) != 0 || (mark & 0x7) == 0 {
+            panic!("mark is not valid");
+        }
+
+        // mark 与内核定义的 MapPermission 不同
+        let mark = mark << 1;
+        let mark_ = MapPermission::from_bits_truncate(mark as u8) | MapPermission::U;
+
+        let token = self.user_token();
+
+        let start_va = va_;
+        let end_va = VirtAddr::from(va + size);
+
+        self.memory_set.insert_framed_area(start_va, end_va, mark_);
+    }
+
+    pub fn munmap(&mut self, va: usize, size: usize) {
+        let va_ = VirtAddr::from(va);
+        if !va_.is_aligned() {
+            panic!("va is not aligned");
+        }
+
+        let token = self.user_token();
+
+        let start_va = va_;
+        let end_va = VirtAddr::from(va + size);
+
+        self.memory_set.remove_framed_area(start_va, end_va);
+    }
+}
+
 #[derive(Copy, Clone, PartialEq)]
 pub enum TaskStatus {
     // UnInit, // unsued
@@ -100,3 +139,13 @@ pub enum TaskStatus {
     Running,
     Exited,
 }
+
+// void func(int* i) {
+//     i = func_return_int_ptr();
+//     *i = 1; // 不会改变a的值
+// }
+
+// void func_call() {
+//     int a = 0;
+//     func(&a);
+// }

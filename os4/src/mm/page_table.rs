@@ -117,7 +117,6 @@ impl PageTable {
         }
         result
     }
-    #[allow(unused)]
     /// 通过 map 方法来在多级页表中插入一个键值对。注意这里将物理页号 ppn 和页表项标志位 flags 作为不同的参数传入
     pub fn map(&mut self, vpn: VirtPageNum, ppn: PhysPageNum, flags: PTEFlags) {
         let pte = self.find_pte_or_create(vpn).unwrap();
@@ -182,6 +181,16 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&
     }
     v
 }
+
+// lab2
+// 通过 token 和 ptr 来获取一个指向内核空间的可变引用
+pub fn translated_mut<T>(token: usize, ptr: *const T) -> &'static mut T {
+    let page_table = PageTable::from_token(token);
+    let va = VirtAddr::from(ptr as usize);
+    let vpn = va.floor();
+    page_table.translate(vpn).unwrap().ppn().get_mut()
+}
+
 // 补充
 
 // PageTable
