@@ -206,6 +206,12 @@ impl MemorySet {
             None,
         );
     }
+
+    // lab2
+    pub fn is_vpn_mapped(&self, vpn: VirtPageNum) -> bool {
+        self.translate(vpn).is_some()
+    }
+
     /// 在当前地址空间插入一个新的逻辑段 map_area
     fn push(&mut self, mut map_area: MapArea, data: Option<&[u8]>) {
         map_area.map(&mut self.page_table);

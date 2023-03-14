@@ -139,6 +139,11 @@ impl PhysAddr {
     pub fn is_aligned(&self) -> bool {
         self.page_offset() == 0
     }
+
+    // lab2 (maybe no use)
+    pub fn get_mut<T>(&self) -> &'static mut T {
+        unsafe { (self.0 as *mut T).as_mut().unwrap() }
+    }
 }
 impl From<PhysAddr> for PhysPageNum {
     fn from(pa: PhysAddr) -> Self {

@@ -1,6 +1,6 @@
 use super::TaskContext;
 use crate::config::{kernel_stack_position, MAX_SYSCALL_NUM, TRAP_CONTEXT};
-use crate::mm::{MapPermission, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
+use crate::mm::{MapPermission, MemorySet, PageTable, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::trap::{trap_handler, TrapContext};
 
 pub struct TaskControlBlock {
@@ -95,40 +95,65 @@ impl TaskControlBlock {
 
 // lab2
 impl TaskControlBlock {
-    pub fn mmap(&mut self, va: usize, size: usize, mark: usize) {
+    pub fn mmap(&mut self, va: usize, size: usize, mark: usize) -> isize {
         let va_ = VirtAddr::from(va);
         if !va_.is_aligned() {
-            panic!("va is not aligned");
+            // panic!("va is not aligned");
+            return -1;
         }
 
         if (mark & !0x7) != 0 || (mark & 0x7) == 0 {
-            panic!("mark is not valid");
+            // panic!("mark is not valid");
+            return -1;
+        }
+
+        // let token = self.user_token();
+        // let page_table = PageTable::from_token(token);
+        // let vpn = va_.floor();
+        // debug!("vpn: {:?}", vpn);
+        // debug!("test pte is_some");
+        // if page_table.find_pte(vpn).is_some() {
+        //     // 似乎没法判断是否有分配，怀疑临时page_table 释放掉frame(中间用于查找页表项的frame)
+        //     // panic!("va is already mapped");
+        //     debug!("va is already mapped");
+        //     debug!("pte is {:?}", page_table.find_pte(vpn).unwrap());
+        //     return -1;
+        // }
+        // debug!("test pte is_some end");
+
+        let vpn = va_.floor();
+        debug!("vpn: {:?}", vpn);
+        if self.memory_set.is_vpn_mapped(vpn) {
+            // panic!("va is already mapped");
+            debug!("va is already mapped");
+            return -1;
         }
 
         // mark 与内核定义的 MapPermission 不同
         let mark = mark << 1;
         let mark_ = MapPermission::from_bits_truncate(mark as u8) | MapPermission::U;
 
-        let token = self.user_token();
-
         let start_va = va_;
         let end_va = VirtAddr::from(va + size);
 
         self.memory_set.insert_framed_area(start_va, end_va, mark_);
+
+        0
     }
 
-    pub fn munmap(&mut self, va: usize, size: usize) {
+    pub fn munmap(&mut self, va: usize, size: usize) -> isize {
         let va_ = VirtAddr::from(va);
         if !va_.is_aligned() {
-            panic!("va is not aligned");
+            // panic!("va is not aligned");
+            return -1;
         }
-
-        let token = self.user_token();
 
         let start_va = va_;
         let end_va = VirtAddr::from(va + size);
 
         self.memory_set.remove_framed_area(start_va, end_va);
+
+        0
     }
 }
 

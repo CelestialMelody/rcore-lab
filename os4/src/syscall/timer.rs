@@ -1,7 +1,5 @@
 use core::ops::{Add, Sub};
 
-use crate::config::CLOCK_FREQ;
-
 pub const TICKS_PER_SEC: usize = 100;
 pub const MSEC_PER_SEC: usize = 1000;
 pub const USEC_PER_SEC: usize = 1_000_000;

@@ -234,16 +234,16 @@ impl TaskManager {
         inner.tasks[inner.current_task].trap_cx()
     }
 
-    fn mmap(&self, va: usize, size: usize, mark: usize) {
+    fn mmap(&self, va: usize, size: usize, mark: usize) -> isize {
         let mut inner = self.inner.exclusive_access();
         let task_id = inner.current_task;
-        inner.tasks[task_id].mmap(va, size, mark);
+        inner.tasks[task_id].mmap(va, size, mark)
     }
 
-    fn munmap(&self, va: usize, size: usize) {
+    fn munmap(&self, va: usize, size: usize) -> isize {
         let mut inner = self.inner.exclusive_access();
         let task_id = inner.current_task;
-        inner.tasks[task_id].munmap(va, size);
+        inner.tasks[task_id].munmap(va, size)
     }
 }
 
@@ -310,10 +310,10 @@ pub fn current_trap_cx() -> &'static mut TrapContext {
     TASK_MANAGER.get_current_trap_cx()
 }
 
-pub fn mmap(va: usize, size: usize, mark: usize) {
-    TASK_MANAGER.mmap(va, size, mark);
+pub fn mmap(va: usize, size: usize, mark: usize) -> isize {
+    TASK_MANAGER.mmap(va, size, mark)
 }
 
-pub fn munmap(va: usize, size: usize) {
-    TASK_MANAGER.munmap(va, size);
+pub fn munmap(va: usize, size: usize) -> isize {
+    TASK_MANAGER.munmap(va, size)
 }

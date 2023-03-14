@@ -19,7 +19,7 @@ bitflags! {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(C)]
 /// page table entry structure
 pub struct PageTableEntry {
@@ -42,6 +42,7 @@ impl PageTableEntry {
     pub fn flags(&self) -> PTEFlags {
         PTEFlags::from_bits(self.bits as u8).unwrap()
     }
+    // contains PTEFlags::V means valid, and map to a physical page
     pub fn is_valid(&self) -> bool {
         // self.flags().contains(PTEFlags::V)
         (self.flags() & PTEFlags::V) != PTEFlags::empty()
@@ -99,7 +100,7 @@ impl PageTable {
         }
         result
     }
-    fn find_pte(&self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {
+    pub fn find_pte(&self, vpn: VirtPageNum) -> Option<&mut PageTableEntry> {
         let idxs = vpn.indexes();
         let mut ppn = self.root_ppn;
         let mut result: Option<&mut PageTableEntry> = None;
@@ -186,9 +187,16 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&
 // 通过 token 和 ptr 来获取一个指向内核空间的可变引用
 pub fn translated_mut<T>(token: usize, ptr: *const T) -> &'static mut T {
     let page_table = PageTable::from_token(token);
+
+    let offset = ptr as usize % crate::config::PAGE_SIZE;
+
     let va = VirtAddr::from(ptr as usize);
     let vpn = va.floor();
-    page_table.translate(vpn).unwrap().ppn().get_mut()
+    let ppn = page_table.translate(vpn).unwrap().ppn();
+    unsafe {
+        &mut *(ppn.get_bytes_array()[offset..offset + core::mem::size_of::<T>()].as_mut_ptr()
+            as *mut T)
+    }
 }
 
 // 补充

@@ -33,6 +33,8 @@ pub fn sys_yield() -> isize {
 // YOUR JOB: 引入虚地址后重写 sys_get_time
 pub fn sys_get_time(mut ts: *mut TimeVal, _tz: usize) -> isize {
     // lab2
+    // debug!("sys_get_time: ts={:x}", ts as usize);
+
     let token = current_user_token();
     ts = translated_mut(token, ts);
     unsafe { *ts = get_time_val() }
@@ -63,8 +65,7 @@ pub fn sys_set_priority(_prio: isize) -> isize {
 // 一定要注意 mmap 是的页表项，注意 riscv 页表项的格式与 port 的区别。
 // 增加 PTE_U
 pub fn sys_mmap(start_va: usize, len: usize, mark: usize) -> isize {
-    mmap(start_va, len, mark);
-    0
+    mmap(start_va, len, mark)
 }
 
 // syscall ID：215
@@ -75,8 +76,7 @@ pub fn sys_mmap(start_va: usize, len: usize, mark: usize) -> isize {
 // 可能的错误：
 // [start, start + len) 中存在未被映射的虚存。
 pub fn sys_munmap(start: usize, len: usize) -> isize {
-    munmap(start, len);
-    0
+    munmap(start, len)
 }
 
 /// 获取当前任务的信息

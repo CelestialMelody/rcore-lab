@@ -1,7 +1,7 @@
 # Building
 TARGET := riscv64gc-unknown-none-elf
-MODE := release
-# MODE := debug
+# MODE := release
+MODE := debug
 NAME := os4
 
 CHAPTER ?= 4
@@ -39,7 +39,7 @@ $(KERNEL_BIN): kernel
 # release: cargo build --release
 kernel:
 	@make -C ../user build TEST=$(TEST) CHAPTER=$(CHAPTER) BASE=$(BASE)
-	@cargo build --release
+	@cargo build
 
 LINK_APP_S := src/link_app.S
 
@@ -63,4 +63,4 @@ debug: build
 dump: run
 	@$(RV64_OBJDUMP) $(KERNEL_ELF) -d > os.dump.s
 
-.PHONY: build env kernel clean run-inner
+.PHONY: build kernel clean run-inner
