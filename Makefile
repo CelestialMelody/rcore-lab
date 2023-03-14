@@ -1,4 +1,4 @@
-DOCKER_NAME ?= rust-os-camp-2022
+DOCKER_NAME ?= rcore-env
 DIR := workplace
 .PHONY: docker build_docker
 
