@@ -63,9 +63,18 @@ clean:
 	rm -rf ${DIR}
 
 docker:
-	docker run --rm -it -v ${PWD}:/mnt -w /mnt ${DOCKER_NAME} bash
+	docker run --rm -it -v ${PWD}:/mnt  ${DOCKER_NAME} bash
 
-build_docker: 
+# current woekplace for my own use
+ContainerName = rcore
+WorkPlace = /mnt/d/wsl/rCore
+run_docker:
+	docker run -p 9000:9000 --name ${ContainerName} -v ${WorkPlace}:/mnt -w /mnt -it -d ${DOCKER_NAME} bash
+
+exec_docker:
+	docker exec -it ${ContainerName} bash
+
+build_docker:
 	docker build -t ${DOCKER_NAME} .
 
 setupclassroom_test1:
